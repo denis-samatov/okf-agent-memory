@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -67,14 +68,63 @@ func AppendLogEntry(bundleDir, entryType, description string) error {
 	return os.WriteFile(logPath, []byte(existingContent), 0o644)
 }
 
+// ValidateConceptID verifies that a concept ID conforms to OKF naming conventions
+// and does not attempt path traversal or target reserved bundle files.
+func ValidateConceptID(id string) error {
+	trimmed := strings.TrimSpace(id)
+	if trimmed == "" {
+		return fmt.Errorf("concept ID cannot be empty")
+	}
+
+	cleanID := strings.TrimSuffix(trimmed, ".md")
+	if cleanID == "" || cleanID == "." || cleanID == ".." {
+		return fmt.Errorf("invalid concept ID %q", id)
+	}
+
+	if filepath.IsAbs(cleanID) || strings.HasPrefix(cleanID, "/") || strings.HasPrefix(cleanID, "\\") {
+		return fmt.Errorf("concept ID %q must be a relative path", id)
+	}
+
+	// Split by '/' or '\' and inspect each path component
+	parts := strings.FieldsFunc(cleanID, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	if slices.Contains(parts, "..") {
+		return fmt.Errorf("concept ID %q contains forbidden '..' traversal", id)
+	}
+
+	// Clean path and ensure it does not escape
+	cleaned := filepath.Clean(cleanID)
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("concept ID %q escapes bundle directory", id)
+	}
+
+	// Check for reserved root filenames
+	if cleaned == "index" || cleaned == "log" {
+		return fmt.Errorf("concept ID %q is a reserved bundle root document", id)
+	}
+
+	return nil
+}
+
 // UpdateParentIndex ensures the concept is listed in its immediate directory index.md.
 func UpdateParentIndex(bundleDir string, c *Concept) error {
+	absBundle, err := filepath.Abs(bundleDir)
+	if err != nil {
+		return fmt.Errorf("invalid bundle directory: %w", err)
+	}
+
 	dir := filepath.Dir(c.Path)
 	indexRelPath := "index.md"
 	if dir != "." {
 		indexRelPath = filepath.Join(dir, "index.md")
 	}
-	indexPath := filepath.Join(bundleDir, indexRelPath)
+
+	indexPath := filepath.Join(absBundle, filepath.Clean(indexRelPath))
+	rel, err := filepath.Rel(absBundle, indexPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path traversal denied: parent index %q escapes bundle directory", indexRelPath)
+	}
 
 	targetFilename := filepath.Base(c.Path)
 	targetTitle := c.Title
@@ -120,9 +170,37 @@ func UpdateParentIndex(bundleDir string, c *Concept) error {
 	return os.WriteFile(indexPath, []byte(existingContent), 0o644)
 }
 
+// resolveInBundle joins relPath onto bundleDir and refuses any result that
+// resolves outside the bundle directory or targets reserved root files.
+func resolveInBundle(bundleDir, relPath string) (string, error) {
+	absBundle, err := filepath.Abs(bundleDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve bundle directory: %w", err)
+	}
+
+	cleanRel := filepath.Clean(relPath)
+	full := filepath.Join(absBundle, cleanRel)
+	rel, err := filepath.Rel(absBundle, full)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve concept path %q: %w", relPath, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path traversal denied: concept path %q escapes bundle directory", relPath)
+	}
+	// Disallow overwriting root reserved files as concept documents
+	if rel == "." || rel == "index.md" || rel == "log.md" {
+		return "", fmt.Errorf("cannot write concept to reserved bundle file %q", rel)
+	}
+	return full, nil
+}
+
 // SaveConcept writes a concept file to disk and optionally executes automatic bookkeeping.
 func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, actor string) error {
-	fullPath := filepath.Join(bundleDir, c.Path)
+	fullPath, err := resolveInBundle(bundleDir, c.Path)
+	if err != nil {
+		return err
+	}
+
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}

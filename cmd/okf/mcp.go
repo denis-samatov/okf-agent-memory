@@ -381,6 +381,10 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 
 	case "okf_show":
 		conceptID, _ := callParams.Arguments["concept_id"].(string)
+		if err := okf.ValidateConceptID(conceptID); err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), true)
+			return
+		}
 		conceptID = strings.TrimSuffix(conceptID, ".md")
 		c, ok := b.Concepts[conceptID]
 		if !ok {
@@ -405,6 +409,10 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 
 	case "okf_create":
 		conceptID, _ := callParams.Arguments["concept_id"].(string)
+		if err := okf.ValidateConceptID(conceptID); err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), true)
+			return
+		}
 		conceptType, _ := callParams.Arguments["type"].(string)
 		title, _ := callParams.Arguments["title"].(string)
 		desc, _ := callParams.Arguments["description"].(string)
@@ -433,6 +441,10 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 
 	case "okf_update":
 		conceptID, _ := callParams.Arguments["concept_id"].(string)
+		if err := okf.ValidateConceptID(conceptID); err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), true)
+			return
+		}
 		conceptID = strings.TrimSuffix(conceptID, ".md")
 		c, ok := b.Concepts[conceptID]
 		if !ok {
@@ -461,6 +473,15 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		srcID, _ := callParams.Arguments["source_id"].(string)
 		tgtID, _ := callParams.Arguments["target_id"].(string)
 		desc, _ := callParams.Arguments["description"].(string)
+
+		if err := okf.ValidateConceptID(srcID); err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid source_id: %v", err), true)
+			return
+		}
+		if err := okf.ValidateConceptID(tgtID); err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid target_id: %v", err), true)
+			return
+		}
 
 		if err := okf.RelateConcepts(bundleDir, srcID, tgtID, desc, "agent/mcp"); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Failed to relate concepts: %v", err), true)

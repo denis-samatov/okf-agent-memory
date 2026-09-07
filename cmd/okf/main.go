@@ -327,6 +327,11 @@ func cmdCreate(args []string) {
 		os.Exit(1)
 	}
 
+	if err := okf.ValidateConceptID(args[0]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	conceptID := strings.TrimSuffix(args[0], ".md")
 	var subArgs []string
 	if len(args) > 1 {

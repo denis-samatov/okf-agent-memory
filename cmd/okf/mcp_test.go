@@ -247,3 +247,40 @@ func TestMCPDynamicBundleResolution(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPCreate_PathTraversalDenied(t *testing.T) {
+	tmpDir := t.TempDir()
+	bundleDir := filepath.Join(tmpDir, "bundle")
+	_ = os.MkdirAll(bundleDir, 0o755)
+	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Bundle\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
+
+	inputs := []string{
+		// 1. Attempt path traversal via concept_id
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"../../escaped","type":"Fact","title":"Evil","description":"Should fail."}}}`,
+		// 2. Attempt overwrite reserved index
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"index","type":"Fact","title":"Evil Index","description":"Should fail."}}}`,
+	}
+
+	responses := runMCPConversation(t, bundleDir, inputs)
+	if len(responses) != 2 {
+		t.Fatalf("Expected 2 responses, got %d", len(responses))
+	}
+
+	for i, r := range responses {
+		rMap, ok := r.Result.(map[string]any)
+		if !ok {
+			t.Fatalf("Response %d has unexpected result type: %T", i+1, r.Result)
+		}
+		isError, _ := rMap["isError"].(bool)
+		if !isError {
+			t.Errorf("Expected response %d to have isError: true, got: %+v", i+1, rMap)
+		}
+	}
+
+	// Verify escaped file was NOT created outside bundle
+	escapedFile := filepath.Join(tmpDir, "escaped.md")
+	if _, err := os.Stat(escapedFile); !os.IsNotExist(err) {
+		t.Fatalf("Security failure: %s was created outside bundle via MCP!", escapedFile)
+	}
+}
