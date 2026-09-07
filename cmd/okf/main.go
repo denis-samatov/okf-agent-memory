@@ -100,8 +100,9 @@ Commands:
 
 Flags (general):
   --json                 Emit machine-readable JSON output
-  --strict               Gate connectivity warnings as errors in validate
+  --strict               Gate connectivity warnings and trust gaps as errors in validate
   --drift                Check index.md listing descriptions against concepts
+  --stale                Gate expired review dates (stale_after) as errors in validate
 
 `, Version)
 }
@@ -135,6 +136,7 @@ func cmdValidate(args []string) {
 	fs := flag.NewFlagSet("validate", flag.ExitOnError)
 	strict := fs.Bool("strict", false, "Fail on broken links, orphans, and provenance gaps")
 	drift := fs.Bool("drift", false, "Check for drift between index.md and concept descriptions")
+	stale := fs.Bool("stale", false, "Fail if any concepts are stale (past stale_after)")
 	jsonOut := fs.Bool("json", false, "Output results as JSON")
 
 	bundleDir, flagArgs := defaultBundle(args)
@@ -146,7 +148,7 @@ func cmdValidate(args []string) {
 		os.Exit(2)
 	}
 
-	res := okf.Validate(b, okf.ValidateOptions{Strict: *strict, Drift: *drift})
+	res := okf.Validate(b, okf.ValidateOptions{Strict: *strict, Drift: *drift, Stale: *stale})
 
 	if *jsonOut {
 		data, _ := json.MarshalIndent(res, "", "  ")
@@ -190,13 +192,16 @@ func cmdValidate(args []string) {
 		verStr = "v" + res.DeclaredVer
 	}
 
-	strictStr := ""
+	flagSummary := ""
 	if *strict {
-		strictStr = " [--strict]"
+		flagSummary += " [--strict]"
+	}
+	if *stale {
+		flagSummary += " [--stale]"
 	}
 
 	fmt.Printf("\nOKF v0.2 check of \"%s\" (%s): %d concept(s), %d error(s), %d warning(s); %d broken link(s), %d orphan(s), %d stale%s. ",
-		bundleDir, verStr, res.ConceptCount, len(res.Errors), len(res.Warnings)+len(res.GateFindings), len(res.BrokenLinks), len(res.Orphans), res.StaleCount, strictStr)
+		bundleDir, verStr, res.ConceptCount, len(res.Errors), len(res.Warnings)+len(res.GateFindings), len(res.BrokenLinks), len(res.Orphans), res.StaleCount, flagSummary)
 
 	if !res.IsConformant {
 		fmt.Println("NOT conformant.")

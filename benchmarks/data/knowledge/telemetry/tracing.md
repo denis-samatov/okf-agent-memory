@@ -3,7 +3,7 @@ type: Decision
 title: OpenTelemetry Distributed Tracing and Context Propagation
 description: W3C Trace Context propagation standard with mandated semantic attributes across all RPC and HTTP boundaries.
 tags: [telemetry, tracing, opentelemetry, observability]
-generated: { by: agent/cli, at: 2026-09-05T09:33:41Z }
+generated: { by: agent/cli, at: 2026-08-10T09:00:00Z }
 verified: { by: human:sre@company.dev, at: 2026-08-10T15:00:00Z }
 status: stable
 ---

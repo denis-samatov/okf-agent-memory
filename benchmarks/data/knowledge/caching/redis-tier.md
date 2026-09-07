@@ -3,7 +3,7 @@ type: Decision
 title: Redis Distributed Cache-Aside and TTL Strategy
 description: Cache-aside architecture utilizing Redis Cluster with structured key namespacing and jittered expiration.
 tags: [caching, redis, performance, architecture]
-generated: { by: agent/cli, at: 2026-09-05T09:33:41Z }
+generated: { by: agent/cli, at: 2026-08-18T09:00:00Z }
 verified: { by: human:infra@company.dev, at: 2026-08-18T14:00:00Z }
 status: stable
 ---

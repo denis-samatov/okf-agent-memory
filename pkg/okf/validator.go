@@ -32,6 +32,25 @@ type ValidationResult struct {
 type ValidateOptions struct {
 	Strict bool
 	Drift  bool
+	Stale  bool
+}
+
+func parseTimestamp(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, l := range layouts {
+		if t, err := time.Parse(l, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // Validate performs full OKF v0.2 conformance, connectivity, and drift validation on a loaded bundle.
@@ -91,12 +110,15 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			res.Errors = append(res.Errors, fmt.Sprintf("%s: 'type' field is missing or empty", at))
 		}
 
+		bodyWithoutFences := StripFences(c.Body)
+
 		// v0.1 leftovers check on v0.2 declared bundle
 		if isV2 {
-			if strings.Contains(c.RawContent, "timestamp:") {
+			fm, _, hasFM := ExtractFrontmatter(c.RawContent)
+			if hasFM && (strings.Contains(fm, "timestamp:") || (c.Extra != nil && c.Extra["timestamp"] != nil)) {
 				res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: legacy 'timestamp' (v0.2 records it as 'generated: { by, at }')", at))
 			}
-			if regexp.MustCompile(`(?m)^#\s+Citations\s*$`).MatchString(c.RawContent) {
+			if regexp.MustCompile(`(?m)^#\s+Citations\s*$`).MatchString(bodyWithoutFences) {
 				res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: legacy '# Citations' body section (v0.2 uses 'sources' frontmatter)", at))
 			}
 		}
@@ -124,7 +146,6 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 
 		// Keyed footnotes validation
 		if len(sourceIDs) > 0 {
-			bodyWithoutFences := StripFences(c.Body)
 			fnMatches := regexp.MustCompile(`\[\^([^\]]+)\]`).FindAllStringSubmatch(bodyWithoutFences, -1)
 			for _, m := range fnMatches {
 				fnKey := m[1]
@@ -145,6 +166,8 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			}
 			if c.Generated.At == "" {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: 'generated' has no 'at' timestamp", at))
+			} else if _, ok := parseTimestamp(c.Generated.At); !ok {
+				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: generated.at '%s' is not a valid ISO 8601 timestamp", at, c.Generated.At))
 			}
 		}
 
@@ -159,6 +182,14 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			}
 			if v.At == "" {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: verified[%d] has no 'at' timestamp", at, i))
+			} else if vT, okV := parseTimestamp(v.At); !okV {
+				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: verified[%d].at '%s' is not a valid ISO 8601 timestamp", at, i, v.At))
+			} else if c.Generated != nil && c.Generated.At != "" {
+				if genT, okGen := parseTimestamp(c.Generated.At); okGen {
+					if vT.Before(genT) {
+						res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: verified[%d].at '%s' predates generated.at '%s' (superseded verification)", at, i, v.At, c.Generated.At))
+					}
+				}
 			}
 		}
 
@@ -171,6 +202,7 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: stale_after '%s' is not YYYY-MM-DD", at, c.StaleAfter))
 			} else if today >= c.StaleAfter {
 				res.StaleCount++
+				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: concept is stale (stale_after %s <= %s)", at, c.StaleAfter, today))
 			}
 		}
 	}
@@ -206,7 +238,8 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 
 	res.IsConformant = len(res.Errors) == 0
 	gateFailure := (opts.Strict && (len(b.BrokenLinks) > 0 || len(b.Orphans) > 0)) ||
-		(opts.Strict && isV2 && len(res.GateFindings) > 0)
+		(opts.Strict && isV2 && len(res.GateFindings) > 0) ||
+		(opts.Stale && res.StaleCount > 0)
 	res.GatePassed = res.IsConformant && !gateFailure
 
 	return res

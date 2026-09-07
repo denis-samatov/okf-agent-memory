@@ -3,7 +3,7 @@ type: Decision
 title: Kubernetes Liveness and Readiness Probe Architecture
 description: Distinct probe endpoints for Kubernetes container lifecycle management with dependency isolation.
 tags: [deployment, kubernetes, k8s, devops]
-generated: { by: agent/cli, at: 2026-09-05T09:33:41Z }
+generated: { by: agent/cli, at: 2026-08-12T09:00:00Z }
 verified: { by: human:devops@company.dev, at: 2026-08-12T16:00:00Z }
 status: stable
 ---

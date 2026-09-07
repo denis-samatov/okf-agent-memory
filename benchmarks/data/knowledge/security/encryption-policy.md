@@ -3,7 +3,7 @@ type: Decision
 title: Customer Payload Data Encryption Standard
 description: Standardized AES-GCM-256 encryption with 96-bit random nonces for all sensitive customer data at rest.
 tags: [security, encryption, crypto, adr]
-generated: { by: agent/cli, at: 2026-09-05T09:33:41Z }
+generated: { by: agent/cli, at: 2026-09-01T09:00:00Z }
 verified: { by: human:ciso@company.dev, at: 2026-09-01T12:00:00Z }
 status: stable
 ---

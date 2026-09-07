@@ -307,3 +307,175 @@ func TestBootstrapExistingAGENTS_SmartAppend(t *testing.T) {
 		t.Errorf("Idempotency check failed: expected exactly 1 OKF block, found %d", firstCount)
 	}
 }
+
+func TestValidateTrustOrdering(t *testing.T) {
+	b := &okf.Bundle{
+		DeclaredVer: "0.2",
+		Concepts: map[string]*okf.Concept{
+			"test/concept": {
+				ID:   "test/concept",
+				Path: "test/concept.md",
+				Type: "Decision",
+				Generated: &okf.Generated{
+					By: "agent/cli",
+					At: "2026-09-05T12:00:00Z",
+				},
+				Verified: []okf.Verified{
+					{
+						By: "human:reviewer@domain.dev",
+						At: "2026-08-10T12:00:00Z", // Predates generated.at
+					},
+				},
+			},
+		},
+		BrokenLinks: []okf.BrokenLink{},
+		Orphans:     []string{},
+	}
+
+	// Without --strict: warnings issued, but gate passed
+	res := okf.Validate(b, okf.ValidateOptions{Strict: false})
+	if !res.IsConformant {
+		t.Errorf("Expected bundle to be conformant")
+	}
+	if !res.GatePassed {
+		t.Errorf("Expected gate to pass without --strict")
+	}
+	if len(res.GateFindings) != 1 {
+		t.Errorf("Expected 1 gate finding for superseded verification, got %d", len(res.GateFindings))
+	}
+
+	// With --strict: producer gate must fail
+	resStrict := okf.Validate(b, okf.ValidateOptions{Strict: true})
+	if !resStrict.IsConformant {
+		t.Errorf("Expected bundle to still be syntactically conformant")
+	}
+	if resStrict.GatePassed {
+		t.Errorf("Expected gate to fail under --strict due to superseded verification")
+	}
+
+	// Now fix verification date: verified after generated
+	b.Concepts["test/concept"].Verified[0].At = "2026-09-05T14:00:00Z"
+	resFixed := okf.Validate(b, okf.ValidateOptions{Strict: true})
+	if !resFixed.GatePassed {
+		t.Errorf("Expected gate to pass under --strict when verification is up-to-date, got findings: %v", resFixed.GateFindings)
+	}
+}
+
+func TestValidateStaleGating(t *testing.T) {
+	b := &okf.Bundle{
+		DeclaredVer: "0.2",
+		Concepts: map[string]*okf.Concept{
+			"test/concept": {
+				ID:         "test/concept",
+				Path:       "test/concept.md",
+				Type:       "Decision",
+				StaleAfter: "2020-01-01", // Past date
+			},
+		},
+		BrokenLinks: []okf.BrokenLink{},
+		Orphans:     []string{},
+	}
+
+	// Under --strict only (without --stale): StaleCount is reported, but gate passes
+	resStrict := okf.Validate(b, okf.ValidateOptions{Strict: true, Stale: false})
+	if resStrict.StaleCount != 1 {
+		t.Errorf("Expected StaleCount to be 1, got %d", resStrict.StaleCount)
+	}
+	if !resStrict.GatePassed {
+		t.Errorf("Expected gate to pass under --strict alone when concept is stale")
+	}
+
+	// With --stale: gate must fail
+	resStale := okf.Validate(b, okf.ValidateOptions{Strict: false, Stale: true})
+	if resStale.StaleCount != 1 {
+		t.Errorf("Expected StaleCount to be 1, got %d", resStale.StaleCount)
+	}
+	if resStale.GatePassed {
+		t.Errorf("Expected gate to fail when Stale: true and StaleCount > 0")
+	}
+}
+
+func TestValidateLegacyV01Checks(t *testing.T) {
+	// 1. Concept with v0.1 legacy timestamp in frontmatter and # Citations heading in body
+	legacyRaw := `---
+type: Decision
+timestamp: 2024-01-01
+---
+# Legacy Decision
+
+Here is some content.
+
+# Citations
+- Source 1
+`
+	cLegacy, err := okf.ParseConcept("legacy/decision.md", legacyRaw)
+	if err != nil {
+		t.Fatalf("ParseConcept failed: %v", err)
+	}
+
+	b := &okf.Bundle{
+		DeclaredVer: "0.2",
+		Concepts: map[string]*okf.Concept{
+			"legacy/decision": cLegacy,
+		},
+		BrokenLinks: []okf.BrokenLink{},
+		Orphans:     []string{},
+	}
+
+	res := okf.Validate(b, okf.ValidateOptions{Strict: true})
+	if res.GatePassed {
+		t.Errorf("Expected bundle with v0.1 legacy constructs to fail under --strict")
+	}
+
+	foundTimestamp := false
+	foundCitations := false
+	for _, f := range res.GateFindings {
+		if strings.Contains(f, "legacy 'timestamp'") {
+			foundTimestamp = true
+		}
+		if strings.Contains(f, "legacy '# Citations'") {
+			foundCitations = true
+		}
+	}
+	if !foundTimestamp {
+		t.Errorf("Expected gate finding for legacy 'timestamp', got: %v", res.GateFindings)
+	}
+	if !foundCitations {
+		t.Errorf("Expected gate finding for legacy '# Citations', got: %v", res.GateFindings)
+	}
+
+	// 2. False-positive immunity: timestamp in code block and # Citations inside markdown fence
+	safeRaw := `---
+type: Decision
+title: Safe Decision
+generated: { by: agent/test, at: 2026-09-01T12:00:00Z }
+---
+# Safe Decision
+
+Here is an example code block with timestamp:
+` + "```yaml" + `
+timestamp: 2024-01-01
+# Citations
+` + "```" + `
+
+And mention timestamp: in regular prose.
+`
+	cSafe, err := okf.ParseConcept("safe/decision.md", safeRaw)
+	if err != nil {
+		t.Fatalf("ParseConcept failed: %v", err)
+	}
+
+	bSafe := &okf.Bundle{
+		DeclaredVer: "0.2",
+		Concepts: map[string]*okf.Concept{
+			"safe/decision": cSafe,
+		},
+		BrokenLinks: []okf.BrokenLink{},
+		Orphans:     []string{},
+	}
+
+	resSafe := okf.Validate(bSafe, okf.ValidateOptions{Strict: true})
+	if !resSafe.GatePassed {
+		t.Errorf("Expected concept with timestamp/citations in code blocks to pass gate, got: %v", resSafe.GateFindings)
+	}
+}

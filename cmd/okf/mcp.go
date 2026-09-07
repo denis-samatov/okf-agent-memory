@@ -238,7 +238,11 @@ func getMCPTools() []map[string]any {
 				"properties": map[string]any{
 					"strict": map[string]any{
 						"type":        "boolean",
-						"description": "Treat connectivity warnings as errors.",
+						"description": "Treat connectivity warnings and trust gaps as errors.",
+					},
+					"stale": map[string]any{
+						"type":        "boolean",
+						"description": "Fail if any concepts have reached their stale_after date.",
 					},
 					"bundle": bundleProp,
 				},
@@ -391,7 +395,11 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		if sVal, ok := callParams.Arguments["strict"].(bool); ok {
 			strict = sVal
 		}
-		res := okf.Validate(b, okf.ValidateOptions{Strict: strict, Drift: true})
+		stale := false
+		if stVal, ok := callParams.Arguments["stale"].(bool); ok {
+			stale = stVal
+		}
+		res := okf.Validate(b, okf.ValidateOptions{Strict: strict, Drift: true, Stale: stale})
 		resJSON, _ := json.Marshal(res)
 		s.sendToolResult(req.ID, string(resJSON), false)
 

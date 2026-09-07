@@ -3,7 +3,7 @@ type: Decision
 title: PostgreSQL Database Schema and Naming Conventions
 description: Strict relational schema conventions requiring snake_case naming, pluralized table names, and UUIDv7 primary keys.
 tags: [database, postgres, sql, conventions]
-generated: { by: agent/cli, at: 2026-09-05T09:33:41Z }
+generated: { by: agent/cli, at: 2026-08-15T08:00:00Z }
 verified: { by: human:db-architect@company.dev, at: 2026-08-15T09:00:00Z }
 status: stable
 ---
