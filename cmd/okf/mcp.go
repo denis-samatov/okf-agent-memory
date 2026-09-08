@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -38,6 +39,7 @@ type mcpToolCallParams struct {
 
 type mcpServer struct {
 	bundleDir string
+	rootDir   string
 	writer    io.Writer
 	mu        sync.Mutex
 }
@@ -49,8 +51,34 @@ func RunMCPServer(bundleDir string) error {
 
 // RunMCPServerIO runs the MCP server on the provided reader and writer.
 func RunMCPServerIO(bundleDir string, in io.Reader, out io.Writer) error {
+	rootDir := os.Getenv("OKF_MCP_ROOT")
+	if rootDir == "" {
+		if bundleDir != "" && bundleDir != "." {
+			cleanBundle := filepath.Clean(bundleDir)
+			if filepath.Base(cleanBundle) == "knowledge" {
+				rootDir = filepath.Dir(cleanBundle)
+				if rootDir == "" {
+					rootDir = "."
+				}
+			} else {
+				rootDir = cleanBundle
+			}
+		} else {
+			rootDir = "."
+		}
+	}
+
+	absRoot, err := filepath.Abs(rootDir)
+	if err == nil {
+		if evalRoot, err := filepath.EvalSymlinks(absRoot); err == nil {
+			absRoot = evalRoot
+		}
+		rootDir = absRoot
+	}
+
 	s := &mcpServer{
 		bundleDir: bundleDir,
+		rootDir:   rootDir,
 		writer:    out,
 	}
 
@@ -333,20 +361,57 @@ func getMCPTools() []map[string]any {
 	}
 }
 
-func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) string {
+func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, error) {
+	var target string
 	if bArg, ok := callParams.Arguments["bundle"].(string); ok {
-		trimmed := strings.TrimSpace(bArg)
-		if trimmed != "" {
-			return trimmed
+		target = strings.TrimSpace(bArg)
+	}
+
+	if target == "" {
+		if s.bundleDir != "" && s.bundleDir != "." {
+			target = s.bundleDir
+		} else if info, err := os.Stat("knowledge"); err == nil && info.IsDir() {
+			target = "knowledge"
+		} else {
+			target = "."
 		}
 	}
-	if s.bundleDir != "" && s.bundleDir != "." {
-		return s.bundleDir
+
+	// Confinement check: if s.rootDir is configured, target must stay within s.rootDir
+	if s.rootDir != "" {
+		absRoot, err := filepath.EvalSymlinks(s.rootDir)
+		if err != nil {
+			absRoot, err = filepath.Abs(s.rootDir)
+			if err != nil {
+				return "", fmt.Errorf("invalid server root directory: %w", err)
+			}
+		} else {
+			absRoot, _ = filepath.Abs(absRoot)
+		}
+
+		var absTarget string
+		if filepath.IsAbs(target) {
+			absTarget = target
+		} else {
+			absTarget = filepath.Join(s.rootDir, target)
+		}
+
+		evalTarget, err := filepath.EvalSymlinks(absTarget)
+		if err == nil {
+			absTarget, _ = filepath.Abs(evalTarget)
+		} else {
+			absTarget, _ = filepath.Abs(absTarget)
+		}
+
+		rel, err := filepath.Rel(absRoot, absTarget)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("bundle directory %q escapes server root %q", target, s.rootDir)
+		}
+
+		return absTarget, nil
 	}
-	if info, err := os.Stat("knowledge"); err == nil && info.IsDir() {
-		return "knowledge"
-	}
-	return "."
+
+	return target, nil
 }
 
 func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
@@ -360,7 +425,11 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		callParams.Arguments = make(map[string]any)
 	}
 
-	bundleDir := s.resolveBundleDir(callParams)
+	bundleDir, err := s.resolveBundleDir(callParams)
+	if err != nil {
+		s.sendToolResult(req.ID, fmt.Sprintf("Path traversal denied: %v", err), true)
+		return
+	}
 
 	b, err := okf.LoadBundle(bundleDir)
 	if err != nil {

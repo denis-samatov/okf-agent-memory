@@ -237,7 +237,7 @@ func TestMCPDynamicBundleResolution(t *testing.T) {
 		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"okf_search","arguments":{"bundle":"` + bundleB + `","query":"Beta"}}}`,
 	}
 
-	responses := runMCPConversation(t, ".", inputs)
+	responses := runMCPConversation(t, tmpDir, inputs)
 	if len(responses) != 4 {
 		t.Fatalf("Expected 4 responses, got %d", len(responses))
 	}
@@ -282,5 +282,47 @@ func TestMCPCreate_PathTraversalDenied(t *testing.T) {
 	escapedFile := filepath.Join(tmpDir, "escaped.md")
 	if _, err := os.Stat(escapedFile); !os.IsNotExist(err) {
 		t.Fatalf("Security failure: %s was created outside bundle via MCP!", escapedFile)
+	}
+}
+
+func TestMCPBundle_PathTraversalDenied(t *testing.T) {
+	tmpDir := t.TempDir()
+	serverRoot := filepath.Join(tmpDir, "server")
+	bundleDir := filepath.Join(serverRoot, "knowledge")
+	_ = os.MkdirAll(bundleDir, 0o755)
+	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Root\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
+
+	inputs := []string{
+		// 1. Attempt bundle traversal via relative ../
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_search","arguments":{"bundle":"../../outside","query":"test"}}}`,
+		// 2. Attempt bundle traversal via absolute path outside server root
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_search","arguments":{"bundle":"/etc","query":"test"}}}`,
+		// 3. Attempt create in bundle outside server root
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"/tmp","concept_id":"evil","type":"Fact","title":"Evil","description":"Should fail"}}}`,
+	}
+
+	responses := runMCPConversation(t, bundleDir, inputs)
+	if len(responses) != len(inputs) {
+		t.Fatalf("Expected %d responses, got %d", len(inputs), len(responses))
+	}
+
+	for i, r := range responses {
+		rMap, ok := r.Result.(map[string]any)
+		if !ok {
+			t.Fatalf("Response %d has unexpected result type: %T", i+1, r.Result)
+		}
+		isError, _ := rMap["isError"].(bool)
+		if !isError {
+			t.Errorf("Expected response %d to have isError: true, got: %+v", i+1, rMap)
+		}
+		content, _ := rMap["content"].([]any)
+		if len(content) > 0 {
+			cMap, _ := content[0].(map[string]any)
+			text, _ := cMap["text"].(string)
+			if !strings.Contains(text, "Path traversal denied") && !strings.Contains(text, "escapes server root") {
+				t.Errorf("Expected path traversal error message, got: %q", text)
+			}
+		}
 	}
 }

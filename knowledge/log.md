@@ -1,4 +1,5 @@
 ## 2026-09-08
+* **Security**: Enforced MCP server root directory confinement in `resolveBundleDir` preventing path traversal outside workspace via the `bundle` tool parameter.
 * **Security**: Hardened bundle operations and mutations against path traversal and symlink escapes (LFI and arbitrary file write prevention) via canonical boundary verification in `LoadBundle`, `SaveConcept`, `UpdateParentIndex`, and `AppendLogEntry`.
 * **Security**: Enforced single-line constraints and frontmatter delimiter sanitization on concept metadata to prevent YAML attribute smuggling.
 
