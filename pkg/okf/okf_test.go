@@ -703,3 +703,93 @@ Prose content.
 		t.Errorf("Expected gate to pass, got findings: %v", res.GateFindings)
 	}
 }
+
+func TestLoadAndValidateDotDirectoryBundle(t *testing.T) {
+	tmpDir := t.TempDir()
+	dotBundleDir := filepath.Join(tmpDir, ".okf")
+
+	if err := os.MkdirAll(filepath.Join(dotBundleDir, "decisions"), 0o755); err != nil {
+		t.Fatalf("Failed to create decisions dir: %v", err)
+	}
+	// Create hidden subdir that should be skipped
+	if err := os.MkdirAll(filepath.Join(dotBundleDir, ".git"), 0o755); err != nil {
+		t.Fatalf("Failed to create .git dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dotBundleDir, ".git", "HEAD.md"), []byte("ref: refs/heads/main"), 0o644); err != nil {
+		t.Fatalf("Failed to write .git file: %v", err)
+	}
+	// Create hidden file that should be skipped
+	if err := os.WriteFile(filepath.Join(dotBundleDir, ".ignored.md"), []byte("ignored"), 0o644); err != nil {
+		t.Fatalf("Failed to write .ignored.md: %v", err)
+	}
+
+	rootIndex := `---
+okf_version: "0.2"
+---
+# Dot Directory Knowledge Base
+`
+	if err := os.WriteFile(filepath.Join(dotBundleDir, "index.md"), []byte(rootIndex), 0o644); err != nil {
+		t.Fatalf("Failed to write index.md: %v", err)
+	}
+
+	rawA := `---
+type: Decision
+title: Decision A
+description: Decision A in dot bundle.
+generated: { by: agent/test, at: 2026-09-08T08:00:00Z }
+---
+# Decision A
+
+Content of A.
+`
+	if err := os.WriteFile(filepath.Join(dotBundleDir, "decisions", "a.md"), []byte(rawA), 0o644); err != nil {
+		t.Fatalf("Failed to write decisions/a.md: %v", err)
+	}
+
+	// 1. Test LoadBundle on dotBundleDir
+	bundle, err := okf.LoadBundle(dotBundleDir)
+	if err != nil {
+		t.Fatalf("LoadBundle failed on dot-directory bundle: %v", err)
+	}
+
+	if bundle.DeclaredVer != "0.2" {
+		t.Errorf("Expected DeclaredVer '0.2', got %q", bundle.DeclaredVer)
+	}
+
+	if len(bundle.Concepts) != 1 {
+		t.Fatalf("Expected exactly 1 concept in dot bundle, got %d: %+v", len(bundle.Concepts), bundle.Concepts)
+	}
+	if _, ok := bundle.Concepts["decisions/a"]; !ok {
+		t.Errorf("Expected concept 'decisions/a' to be loaded")
+	}
+
+	// 2. Validate dot directory bundle
+	res := okf.Validate(bundle, okf.ValidateOptions{Strict: true})
+	if !res.IsConformant {
+		t.Errorf("Expected dot bundle to be conformant, got errors: %v", res.Errors)
+	}
+	if len(res.Errors) != 0 || len(res.Warnings) != 0 {
+		t.Errorf("Expected 0 errors and 0 warnings, got errors=%v, warnings=%v", res.Errors, res.Warnings)
+	}
+
+	// 3. Test relative path variations: .okf, .okf/, ./.okf
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get wd: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	for _, relRoot := range []string{".okf", ".okf/", "./.okf"} {
+		bRel, err := okf.LoadBundle(relRoot)
+		if err != nil {
+			t.Errorf("LoadBundle(%q) failed: %v", relRoot, err)
+			continue
+		}
+		if len(bRel.Concepts) != 1 {
+			t.Errorf("LoadBundle(%q) loaded %d concepts, expected 1", relRoot, len(bRel.Concepts))
+		}
+	}
+}

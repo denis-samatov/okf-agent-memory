@@ -126,14 +126,22 @@ func LoadBundle(root string) (*Bundle, error) {
 			return walkErr
 		}
 		if d.IsDir() {
+			if path == root {
+				return nil
+			}
+			rel, err := filepath.Rel(root, path)
+			if err == nil && (rel == "." || rel == "") {
+				return nil
+			}
 			name := d.Name()
-			if (strings.HasPrefix(name, ".") && name != ".") || name == "node_modules" {
+			if strings.HasPrefix(name, ".") || name == "node_modules" {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if !strings.HasSuffix(d.Name(), ".md") {
+		name := d.Name()
+		if strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".md") {
 			return nil
 		}
 
@@ -142,7 +150,6 @@ func LoadBundle(root string) (*Bundle, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		name := filepath.Base(rel)
 
 		// Security: prevent symlink following outside bundle directory
 		if d.Type()&fs.ModeSymlink != 0 {
