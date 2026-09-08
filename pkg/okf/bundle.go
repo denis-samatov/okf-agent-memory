@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -214,7 +215,10 @@ func LoadBundle(root string) (*Bundle, error) {
 
 // ResolveLink converts a link href from a source concept into a target concept ID.
 func (b *Bundle) ResolveLink(sourceRelPath, href string) string {
-	cleanHref, _, _ := strings.Cut(strings.Split(href, "#")[0], "?")
+	normSource := strings.ReplaceAll(sourceRelPath, "\\", "/")
+	normHref := strings.ReplaceAll(href, "\\", "/")
+
+	cleanHref, _, _ := strings.Cut(strings.Split(normHref, "#")[0], "?")
 	if cleanHref == "" {
 		return ""
 	}
@@ -223,15 +227,16 @@ func (b *Bundle) ResolveLink(sourceRelPath, href string) string {
 	if after, ok := strings.CutPrefix(cleanHref, "/"); ok {
 		base = after
 	} else {
-		srcDir := filepath.Dir(sourceRelPath)
+		srcDir := path.Dir(normSource)
 		if srcDir == "." {
 			base = cleanHref
 		} else {
-			base = filepath.Join(srcDir, cleanHref)
+			base = path.Join(srcDir, cleanHref)
 		}
 	}
 
-	cleanPath := filepath.Clean(filepath.ToSlash(base))
+	cleanPath := path.Clean(base)
+	cleanPath = strings.TrimPrefix(cleanPath, "/")
 	return strings.TrimSuffix(cleanPath, ".md")
 }
 
@@ -257,7 +262,7 @@ func (b *Bundle) buildGraph() {
 
 			targetID := b.ResolveLink(concept.Path, href)
 			targetRel := targetID + ".md"
-			targetBase := filepath.Base(targetRel)
+			targetBase := path.Base(targetRel)
 
 			if targetBase == "index.md" || targetBase == "log.md" {
 				b.BrokenLinks = append(b.BrokenLinks, BrokenLink{

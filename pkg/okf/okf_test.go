@@ -479,3 +479,151 @@ And mention timestamp: in regular prose.
 		t.Errorf("Expected concept with timestamp/citations in code blocks to pass gate, got: %v", resSafe.GateFindings)
 	}
 }
+
+func TestResolveLinkCrossPlatform(t *testing.T) {
+	b := &okf.Bundle{}
+
+	tests := []struct {
+		name     string
+		source   string
+		href     string
+		expected string
+	}{
+		{
+			name:     "same directory relative link",
+			source:   "decisions/a.md",
+			href:     "b.md",
+			expected: "decisions/b",
+		},
+		{
+			name:     "same directory relative link with dot slash",
+			source:   "decisions/a.md",
+			href:     "./b.md",
+			expected: "decisions/b",
+		},
+		{
+			name:     "cross directory relative link",
+			source:   "decisions/a.md",
+			href:     "../architecture/x.md",
+			expected: "architecture/x",
+		},
+		{
+			name:     "root relative link with leading slash",
+			source:   "decisions/a.md",
+			href:     "/architecture/x.md",
+			expected: "architecture/x",
+		},
+		{
+			name:     "root level source concept to subfolder",
+			source:   "overview.md",
+			href:     "decisions/a.md",
+			expected: "decisions/a",
+		},
+		{
+			name:     "root level source concept to sibling",
+			source:   "overview.md",
+			href:     "faq.md",
+			expected: "faq",
+		},
+		{
+			name:     "link with anchor fragment",
+			source:   "decisions/a.md",
+			href:     "b.md#section-heading",
+			expected: "decisions/b",
+		},
+		{
+			name:     "link with query and anchor",
+			source:   "decisions/a.md",
+			href:     "b.md?view=diff#anchor",
+			expected: "decisions/b",
+		},
+		{
+			name:     "windows backslash in source path",
+			source:   "decisions\\a.md",
+			href:     "b.md",
+			expected: "decisions/b",
+		},
+		{
+			name:     "windows backslash in href",
+			source:   "decisions/a.md",
+			href:     "..\\architecture\\x.md",
+			expected: "architecture/x",
+		},
+		{
+			name:     "traversal attempt in href stays isolated string",
+			source:   "decisions/a.md",
+			href:     "../../../../etc/passwd.md",
+			expected: "../../../etc/passwd",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := b.ResolveLink(tc.source, tc.href)
+			if got != tc.expected {
+				t.Errorf("ResolveLink(%q, %q) = %q, expected %q", tc.source, tc.href, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestValidateBundleRelativeLinksCrossPlatform(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Create decisions/a.md linking to sibling b.md
+	rawA := `---
+type: Decision
+title: Decision A
+description: First decision.
+generated: { by: agent/test, at: 2026-09-08T08:00:00Z }
+---
+# Decision A
+
+See [Decision B](b.md): dependency.
+`
+	// 2. Create decisions/b.md
+	rawB := `---
+type: Decision
+title: Decision B
+description: Second decision.
+generated: { by: agent/test, at: 2026-09-08T08:00:00Z }
+---
+# Decision B
+
+Details about B.
+`
+	decisionsDir := filepath.Join(tmpDir, "decisions")
+	if err := os.MkdirAll(decisionsDir, 0o755); err != nil {
+		t.Fatalf("Failed to create decisions dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(decisionsDir, "a.md"), []byte(rawA), 0o644); err != nil {
+		t.Fatalf("Failed to write a.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(decisionsDir, "b.md"), []byte(rawB), 0o644); err != nil {
+		t.Fatalf("Failed to write b.md: %v", err)
+	}
+	rootIndex := `---
+okf_version: "0.2"
+---
+# Knowledge Base
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte(rootIndex), 0o644); err != nil {
+		t.Fatalf("Failed to write index.md: %v", err)
+	}
+
+	bundle, err := okf.LoadBundle(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadBundle failed: %v", err)
+	}
+
+	res := okf.Validate(bundle, okf.ValidateOptions{Strict: true})
+	if len(res.BrokenLinks) != 0 {
+		t.Errorf("Expected 0 broken links, got %d: %+v", len(res.BrokenLinks), res.BrokenLinks)
+	}
+	if len(res.Orphans) != 0 {
+		t.Errorf("Expected 0 orphans, got %d: %+v", len(res.Orphans), res.Orphans)
+	}
+	if !res.GatePassed {
+		t.Errorf("Expected gate to pass, got findings: %v", res.GateFindings)
+	}
+}
