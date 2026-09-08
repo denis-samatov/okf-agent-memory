@@ -91,8 +91,8 @@ okf relate <source-id> <target-id> knowledge --desc "<relationship description>"
 
 ## 4. End-of-Task Knowledge Review Checklist
 
-After completing any substantial task, ask yourself:
-1. Did I make an important architectural decision? $\rightarrow$ Record under `knowledge/architecture/`
-2. Did I discover a non-obvious requirement or fix? $\rightarrow$ Update the corresponding concept.
-3. Did I add or modify a concept? $\rightarrow$ Verify that `log.md` and parent `index.md` are updated.
-4. Did I run validation? $\rightarrow$ Ensure 0 errors, 0 warnings, 0 orphans, 0 broken links (`okf validate knowledge --strict --drift`).
+Before concluding any substantial task, you MUST systematically verify and complete each item:
+- [ ] **Architectural Decision Made?** $\rightarrow$ Record under `knowledge/architecture/` with cross-links.
+- [ ] **Non-Obvious Requirement or Fix Discovered?** $\rightarrow$ Update the corresponding concept.
+- [ ] **Concept Added or Modified?** $\rightarrow$ Verify that `log.md` and parent `index.md` are updated (automated via `okf create` / `okf relate`).
+- [ ] **Knowledge Conformance Validated?** $\rightarrow$ Ensure 0 errors, 0 warnings, 0 orphans, 0 broken links (`okf validate knowledge --strict --drift` or `make validate`).

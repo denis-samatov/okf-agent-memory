@@ -1,4 +1,9 @@
 ## 2026-09-08
+* **Update**: Linked `architecture/layers.md` to `architecture/security-boundaries.md` (Layer 4 tooling enforces security boundaries and bundle isolation).
+* **Update**: Updated concept `architecture/layers.md`.
+* **Update**: Linked `architecture/tooling-decision.md` to `architecture/security-boundaries.md` (Tooling layer enforces security and bundle containment boundaries).
+* **Update**: Updated concept `architecture/tooling-decision.md`.
+* **Creation**: Documented concept `architecture/security-boundaries.md` (Bundle Isolation and Mutation Security Boundaries).
 * **Security**: Enforced MCP server root directory confinement in `resolveBundleDir` preventing path traversal outside workspace via the `bundle` tool parameter.
 * **Security**: Hardened bundle operations and mutations against path traversal and symlink escapes (LFI and arbitrary file write prevention) via canonical boundary verification in `LoadBundle`, `SaveConcept`, `UpdateParentIndex`, and `AppendLogEntry`.
 * **Security**: Enforced single-line constraints and frontmatter delimiter sanitization on concept metadata to prevent YAML attribute smuggling.

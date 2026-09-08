@@ -4,15 +4,15 @@ title: 5-Layer System Architecture
 description: Structural separation of concerns across the OKF specification, agent convention, skills, deterministic tooling, and knowledge corpus.
 resource: https://github.com/okf-memory/okf-agent-memory
 tags: [architecture, layers, design, tooling]
-generated: { by: agent/gemini-3.7-flash, at: 2026-08-27T11:24:00Z }
+generated: { by: agent/mcp, at: 2026-09-08T07:42:55Z }
 status: stable
 sources:
-  - id: convention
-    resource: ../../docs/CONVENTION.md
+  - resource: ../../docs/CONVENTION.md
+    id: convention
     title: OKF Agent Memory Convention v0.1
     last_modified: 2026-08-27
-  - id: roadmap
-    resource: ../../docs/ROADMAP.md
+  - resource: ../../docs/ROADMAP.md
+    id: roadmap
     title: OKF Agent Memory Project Roadmap
     last_modified: 2026-08-27
 ---
@@ -54,3 +54,6 @@ The version-controlled `knowledge/` directory holding the actual durable concept
 
 [^roadmap]: OKF Agent Memory Project Roadmap
 [^convention]: OKF Agent Memory Convention v0.1
+
+# Related Concepts
+- [Bundle Isolation and Mutation Security Boundaries](security-boundaries.md): Layer 4 tooling enforces security boundaries and bundle isolation
