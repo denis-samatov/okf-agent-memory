@@ -2,17 +2,10 @@ package okf
 
 import (
 	"regexp"
-	"strings"
 )
 
-// Actor format regex: <producer>/<version>, human:<id>, or process:<id>
+// Actor format regex: <producer>/<version> or <prefix>:<id> (OKF v0.2 §7 open family)
 var actorRegex = regexp.MustCompile(`^(?:[a-zA-Z][\w.-]*:\S+|[^\s/]+/[^\s/]+)$`)
-
-// Known standard actor prefixes
-var standardActorPrefixes = map[string]bool{
-	"human":   true,
-	"process": true,
-}
 
 // Concept represents one non-reserved .md file in an OKF bundle.
 type Concept struct {
@@ -80,15 +73,8 @@ func IsValidActor(actor string) bool {
 	return actorRegex.MatchString(actor)
 }
 
-// GetNonStandardPrefix returns the prefix if the actor uses a non-standard prefix (outside human, process, producer/ver).
+// GetNonStandardPrefix returns empty string.
+// Deprecated: In OKF v0.2 §7, the <prefix>:<id> family is open (not a whitelist).
 func GetNonStandardPrefix(actor string) string {
-	if !strings.Contains(actor, ":") {
-		return ""
-	}
-	parts := strings.SplitN(actor, ":", 2)
-	prefix := strings.ToLower(parts[0])
-	if !standardActorPrefixes[prefix] {
-		return prefix
-	}
 	return ""
 }

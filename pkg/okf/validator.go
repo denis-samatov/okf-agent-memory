@@ -135,8 +135,6 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			if s.Author != "" {
 				if !IsValidActor(s.Author) {
 					res.Warnings = append(res.Warnings, fmt.Sprintf("%s: sources[%d].author '%s' is not a valid actor", at, i, s.Author))
-				} else if p := GetNonStandardPrefix(s.Author); p != "" {
-					res.Warnings = append(res.Warnings, fmt.Sprintf("%s: sources[%d].author '%s' uses non-standard prefix '%s:'", at, i, s.Author, p))
 				}
 			}
 			if s.LastModified != "" && !isoDateRegex.MatchString(s.LastModified) {
@@ -161,8 +159,6 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 				res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: 'generated' has no 'by' field", at))
 			} else if !IsValidActor(c.Generated.By) {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: generated.by '%s' is not a valid actor", at, c.Generated.By))
-			} else if p := GetNonStandardPrefix(c.Generated.By); p != "" {
-				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: generated.by '%s' uses non-standard prefix '%s:'", at, c.Generated.By, p))
 			}
 			if c.Generated.At == "" {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: 'generated' has no 'at' timestamp", at))
@@ -177,8 +173,6 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: verified[%d] has no 'by'", at, i))
 			} else if !IsValidActor(v.By) {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: verified[%d].by '%s' is not a valid actor", at, i, v.By))
-			} else if p := GetNonStandardPrefix(v.By); p != "" {
-				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: verified[%d].by '%s' uses non-standard prefix '%s:'", at, i, v.By, p))
 			}
 			if v.At == "" {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: verified[%d] has no 'at' timestamp", at, i))

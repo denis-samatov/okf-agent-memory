@@ -627,3 +627,79 @@ okf_version: "0.2"
 		t.Errorf("Expected gate to pass, got findings: %v", res.GateFindings)
 	}
 }
+
+func TestActorOpenFamilyAndStrictValidation(t *testing.T) {
+	// 1. Valid actors according to OKF v0.2 §7 open family
+	validActors := []string{
+		"agent:opencode/deepseek-v4-flash",
+		"team:ga4-docs",
+		"bot:linter-v2",
+		"service:sync-daemon",
+		"human:alice",
+		"process:ci-runner",
+		"openai/gpt-4o",
+		"anthropic/claude-3-opus",
+		"agent/test-v1",
+	}
+
+	for _, a := range validActors {
+		if !okf.IsValidActor(a) {
+			t.Errorf("Expected %q to be a valid actor", a)
+		}
+	}
+
+	// 2. Invalid actors
+	invalidActors := []string{
+		"",
+		"human",
+		"agent",
+		"agent: space in name",
+		"too/many/slashes/here",
+		"1invalid:prefix-must-start-with-letter",
+	}
+
+	for _, a := range invalidActors {
+		if okf.IsValidActor(a) {
+			t.Errorf("Expected %q to be invalid actor", a)
+		}
+	}
+
+	// 3. Strict validation of a bundle using agent: prefix produces 0 warnings and passes gate
+	raw := `---
+type: Decision
+title: Open Actor Decision
+description: Demonstrates open actor prefix family.
+generated: { by: agent:opencode/deepseek-v4-flash, at: 2026-09-04T12:40:00Z }
+verified:
+  - by: team:ga4-docs
+    at: 2026-09-05T12:00:00Z
+sources:
+  - resource: https://example.com/spec
+    author: process:ci-bot
+---
+# Open Actor Decision
+
+Prose content.
+`
+	c, err := okf.ParseConcept("decisions/open-actor.md", raw)
+	if err != nil {
+		t.Fatalf("ParseConcept failed: %v", err)
+	}
+
+	bundle := &okf.Bundle{
+		DeclaredVer: "0.2",
+		Concepts: map[string]*okf.Concept{
+			"decisions/open-actor": c,
+		},
+		BrokenLinks: []okf.BrokenLink{},
+		Orphans:     []string{},
+	}
+
+	res := okf.Validate(bundle, okf.ValidateOptions{Strict: true})
+	if len(res.Warnings) != 0 {
+		t.Errorf("Expected 0 warnings for spec-valid open actor prefixes, got %d: %v", len(res.Warnings), res.Warnings)
+	}
+	if !res.GatePassed {
+		t.Errorf("Expected gate to pass, got findings: %v", res.GateFindings)
+	}
+}
