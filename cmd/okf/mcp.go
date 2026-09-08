@@ -487,6 +487,19 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		desc, _ := callParams.Arguments["description"].(string)
 		body, _ := callParams.Arguments["body"].(string)
 
+		if strings.TrimSpace(conceptType) == "" {
+			s.sendToolResult(req.ID, "Invalid type: argument 'type' is required and cannot be empty", true)
+			return
+		}
+		if strings.TrimSpace(title) == "" {
+			s.sendToolResult(req.ID, "Invalid title: argument 'title' is required and cannot be empty", true)
+			return
+		}
+		if strings.TrimSpace(desc) == "" {
+			s.sendToolResult(req.ID, "Invalid description: argument 'description' is required and cannot be empty", true)
+			return
+		}
+
 		relPath := conceptID
 		if !strings.HasSuffix(relPath, ".md") {
 			relPath += ".md"
