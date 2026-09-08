@@ -30,9 +30,9 @@ install:
 test:
 	@go test -v ./...
 
-## fmt: Format all Go source files with gofumpt
+## fmt: Format all Go source files with gofumpt / gofmt
 fmt:
-	@gofumpt -w -extra .
+	@which gofumpt > /dev/null && gofumpt -w -extra . || gofmt -w -s .
 
 ## vet: Run go vet static analysis
 vet:
@@ -65,8 +65,8 @@ validate-examples: build
 ## validate-all: Validate project knowledge and all examples
 validate-all: validate validate-examples
 
-## check: Run vet, unit tests, and all bundle validations
-check: vet test validate validate-examples
+## check: Run formatting, vet, unit tests, and all bundle validations
+check: fmt vet test validate validate-examples
 
 ## release: Cross-compile binaries for macOS, Linux, and Windows
 release:
