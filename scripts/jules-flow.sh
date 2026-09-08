@@ -5,7 +5,10 @@ set -euo pipefail
 
 ACTION="${1:-review}"
 REQUESTED_BRANCH="${2:-}"
-BRANCH_PATTERN="origin/security-audit-remediation-*"
+
+get_jules_branches() {
+	git branch -r --list "origin/security-audit-*" "origin/jules-*" "origin/*jules*" | tr -d ' ' | grep -v '^$' | sort -u || true
+}
 
 resolve_target_branch() {
 	git fetch origin --prune 2>/dev/null || true
@@ -24,7 +27,7 @@ resolve_target_branch() {
 	fi
 
 	local branches
-	branches=$(git branch -r --list "$BRANCH_PATTERN" | tr -d ' ' || true)
+	branches=$(get_jules_branches)
 	if [ -z "$branches" ]; then
 		echo ""
 		return 0
@@ -56,7 +59,7 @@ case "$ACTION" in
 	list)
 		echo "==> Open Google Jules security audit branches on origin:"
 		git fetch origin --prune 2>/dev/null || true
-		branches=$(git branch -r --list "$BRANCH_PATTERN")
+		branches=$(get_jules_branches)
 		if [ -z "$branches" ]; then
 			echo "None found."
 		else
