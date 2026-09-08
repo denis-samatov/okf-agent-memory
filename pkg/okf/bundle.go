@@ -271,7 +271,7 @@ func (b *Bundle) buildGraph() {
 			targetRel := targetID + ".md"
 			targetBase := path.Base(targetRel)
 
-			if strings.EqualFold(targetBase, "index.md") || strings.EqualFold(targetBase, "log.md") || strings.EqualFold(targetBase, "AGENTS.md") {
+			if strings.EqualFold(targetBase, "index.md") || strings.EqualFold(targetRel, "log.md") || strings.EqualFold(targetRel, "AGENTS.md") {
 				b.BrokenLinks = append(b.BrokenLinks, BrokenLink{
 					SourceConcept: concept.Path,
 					TargetHref:    href,
