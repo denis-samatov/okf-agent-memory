@@ -4,3 +4,4 @@
 * [Knowledge Lifecycle & Review Workflow](lifecycle.md) - Operational lifecycle stages and the Read-Before-Write loop for discovering, persisting, and updating project knowledge.
 * [Contributor Guidelines & PR Standards](contributing.md) - Engineering standards, zero-dependency policy, validation rules, and PR workflow for contributors.
 * [MCP Tool Security & Untrusted Agent Input](mcp-agent-safety.md) - Conventions for agentic memory operations treating all tool arguments as untrusted input and enforcing boundary confinement.
+* [Automated Security Auditing & Jules Remediation Workflow](security-audit.md) - Proactive continuous security auditing with Google Jules and the isolated worktree review and merge workflow.
