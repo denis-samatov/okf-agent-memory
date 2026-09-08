@@ -1,3 +1,7 @@
+## 2026-09-08
+* **Security**: Hardened bundle operations and mutations against path traversal and symlink escapes (LFI and arbitrary file write prevention) via canonical boundary verification in `LoadBundle`, `SaveConcept`, `UpdateParentIndex`, and `AppendLogEntry`.
+* **Security**: Enforced single-line constraints and frontmatter delimiter sanitization on concept metadata to prevent YAML attribute smuggling.
+
 ## 2026-09-06
 * **Release**: Published version v0.1.1 resolving MCP server JSON-RPC 2.0 notification compliance, adding dynamic multi-bundle resolution, and documenting Dual-Mode (MCP-First) agent workflows.
 

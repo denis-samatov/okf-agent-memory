@@ -39,9 +39,71 @@ type BrokenLink struct {
 	Reason        string `json:"reason"`
 }
 
+// ensureWithinRoot verifies that targetPath (resolving all symlinks) stays strictly
+// within the canonical root directory. It returns the resolved absolute path or an error.
+func ensureWithinRoot(rootDir, targetPath string) (string, error) {
+	realRoot, err := filepath.EvalSymlinks(rootDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve bundle root: %w", err)
+	}
+	realRoot, err = filepath.Abs(realRoot)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path of bundle root: %w", err)
+	}
+
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Walk up to find the closest ancestor that exists, and evaluate its symlinks
+	curr := absTarget
+	var missingParts []string
+	for {
+		_, lstatErr := os.Lstat(curr)
+		if lstatErr == nil {
+			break
+		}
+		missingParts = append([]string{filepath.Base(curr)}, missingParts...)
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+
+	realCurr, err := filepath.EvalSymlinks(curr)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve path %q: %w", curr, err)
+	}
+	realCurr, err = filepath.Abs(realCurr)
+	if err != nil {
+		return "", err
+	}
+
+	parts := append([]string{realCurr}, missingParts...)
+	realTarget := filepath.Join(parts...)
+
+	rel, err := filepath.Rel(realRoot, realTarget)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path traversal denied: %q escapes bundle directory", targetPath)
+	}
+
+	return realTarget, nil
+}
+
 // LoadBundle loads all concepts, indexes, and logs from a bundle directory and builds the relationship graph.
 func LoadBundle(root string) (*Bundle, error) {
-	info, err := os.Stat(root)
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, fmt.Errorf("bundle directory does not exist: %w", err)
+	}
+	realRoot, err = filepath.Abs(realRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path of bundle root: %w", err)
+	}
+
+	info, err := os.Stat(realRoot)
 	if err != nil {
 		return nil, fmt.Errorf("bundle directory does not exist: %w", err)
 	}
@@ -80,6 +142,24 @@ func LoadBundle(root string) (*Bundle, error) {
 		}
 		rel = filepath.ToSlash(rel)
 		name := filepath.Base(rel)
+
+		// Security: prevent symlink following outside bundle directory
+		if d.Type()&fs.ModeSymlink != 0 {
+			realTarget, err := ensureWithinRoot(root, path)
+			if err != nil {
+				return err
+			}
+			fi, err := os.Stat(realTarget)
+			if err != nil {
+				return fmt.Errorf("cannot stat symlink target %q: %w", rel, err)
+			}
+			if fi.IsDir() {
+				return fmt.Errorf("symlink %q points to a directory, not a markdown file", rel)
+			}
+			if !strings.HasSuffix(strings.ToLower(realTarget), ".md") {
+				return fmt.Errorf("symlink %q must point to a markdown (.md) file", rel)
+			}
+		}
 
 		data, err := os.ReadFile(path)
 		if err != nil {

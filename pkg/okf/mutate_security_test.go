@@ -301,3 +301,138 @@ func TestSerializeConceptYAMLQuoting(t *testing.T) {
 		t.Errorf("Round-trip type mismatch: got %q, want %q", parsed.Type, c.Type)
 	}
 }
+
+// TestLoadBundleRejectsExternalSymlinks verifies that LoadBundle refuses to follow symlinks pointing outside the bundle.
+func TestLoadBundleRejectsExternalSymlinks(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	outsideDir := t.TempDir()
+	secretFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(secretFile, []byte("SUPER_SECRET_TOKEN=12345"), 0o600); err != nil {
+		t.Fatalf("Failed to write secret file: %v", err)
+	}
+
+	// Create symlink inside bundle pointing to secret file outside
+	symlinkPath := filepath.Join(bundleDir, "leak.md")
+	if err := os.Symlink(secretFile, symlinkPath); err != nil {
+		t.Skipf("Symlinks not supported on this platform: %v", err)
+	}
+
+	_, err := LoadBundle(bundleDir)
+	if err == nil {
+		t.Fatalf("Expected LoadBundle to fail when an external symlink exists, but got nil")
+	}
+	if !strings.Contains(err.Error(), "path traversal denied") && !strings.Contains(err.Error(), "escapes bundle directory") {
+		t.Errorf("Expected path traversal error message, got: %v", err)
+	}
+}
+
+// TestLoadBundleAllowsInternalSymlinks verifies that symlinks pointing within the bundle are allowed.
+func TestLoadBundleAllowsInternalSymlinks(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	origConcept := &Concept{
+		Path:        "project/overview.md",
+		Title:       "Project Overview",
+		Type:        "Overview",
+		Description: "Main overview",
+		Body:        "# Overview\n\nBody content.",
+	}
+	if err := SaveConcept(bundleDir, origConcept, true, false, true, "test/agent"); err != nil {
+		t.Fatalf("SaveConcept failed: %v", err)
+	}
+
+	// Create internal relative symlink: alias.md -> project/overview.md
+	aliasPath := filepath.Join(bundleDir, "alias.md")
+	targetRel := filepath.Join("project", "overview.md")
+	if err := os.Symlink(targetRel, aliasPath); err != nil {
+		t.Skipf("Symlinks not supported on this platform: %v", err)
+	}
+
+	b, err := LoadBundle(bundleDir)
+	if err != nil {
+		t.Fatalf("Expected LoadBundle to allow internal symlinks, but got error: %v", err)
+	}
+	if _, ok := b.Concepts["project/overview"]; !ok {
+		t.Errorf("Expected concept 'project/overview' in loaded bundle")
+	}
+}
+
+// TestSaveConceptRejectsSymlinkTraversal verifies that SaveConcept refuses to write through symlinks pointing outside.
+func TestSaveConceptRejectsSymlinkTraversal(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	outsideDir := t.TempDir()
+	targetFile := filepath.Join(outsideDir, "critical_config.json")
+	if err := os.WriteFile(targetFile, []byte(`{"protected": true}`), 0o600); err != nil {
+		t.Fatalf("Failed to write target file: %v", err)
+	}
+
+	// Symlink pointing to external file
+	symlinkPath := filepath.Join(bundleDir, "exploit.md")
+	if err := os.Symlink(targetFile, symlinkPath); err != nil {
+		t.Skipf("Symlinks not supported on this platform: %v", err)
+	}
+
+	maliciousConcept := &Concept{
+		Path:        "exploit.md",
+		Title:       "Exploit",
+		Type:        "Attack",
+		Description: "Overwrite attack",
+		Body:        "PWNED",
+	}
+
+	err := SaveConcept(bundleDir, maliciousConcept, false, false, false, "attacker")
+	if err == nil {
+		t.Fatalf("Expected SaveConcept to reject writing through symlink pointing outside, but got nil")
+	}
+	if !strings.Contains(err.Error(), "path traversal denied") && !strings.Contains(err.Error(), "escapes bundle directory") {
+		t.Errorf("Expected path traversal error message, got: %v", err)
+	}
+
+	// Verify original file was not modified
+	data, _ := os.ReadFile(targetFile)
+	if string(data) != `{"protected": true}` {
+		t.Errorf("External file was modified! Got: %s", string(data))
+	}
+}
+
+// TestSaveConceptRejectsDirectorySymlinkEscape verifies that SaveConcept refuses to write through directory symlinks pointing outside.
+func TestSaveConceptRejectsDirectorySymlinkEscape(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	outsideDir := t.TempDir()
+	dirSymlink := filepath.Join(bundleDir, "escapedir")
+	if err := os.Symlink(outsideDir, dirSymlink); err != nil {
+		t.Skipf("Symlinks not supported on this platform: %v", err)
+	}
+
+	maliciousConcept := &Concept{
+		Path:        "escapedir/evil.md",
+		Title:       "Evil",
+		Type:        "Attack",
+		Description: "Directory escape",
+		Body:        "PWNED",
+	}
+
+	err := SaveConcept(bundleDir, maliciousConcept, true, false, false, "attacker")
+	if err == nil {
+		t.Fatalf("Expected SaveConcept to reject directory symlink escape, but got nil")
+	}
+	if !strings.Contains(err.Error(), "path traversal denied") && !strings.Contains(err.Error(), "escapes bundle directory") {
+		t.Errorf("Expected path traversal error message, got: %v", err)
+	}
+}
+

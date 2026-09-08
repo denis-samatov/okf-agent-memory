@@ -51,6 +51,9 @@ func AppendLogEntry(bundleDir, entryType, description string) error {
 	description = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(description, "\r", " "), "\n", " "))
 
 	logPath := filepath.Join(bundleDir, "log.md")
+	if _, err := ensureWithinRoot(bundleDir, logPath); err != nil {
+		return err
+	}
 	today := time.Now().UTC().Format("2006-01-02")
 	newEntry := fmt.Sprintf("* **%s**: %s\n", entryType, description)
 
@@ -129,6 +132,9 @@ func UpdateParentIndex(bundleDir string, c *Concept) error {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("path traversal denied: parent index %q escapes bundle directory", indexRelPath)
 	}
+	if _, err := ensureWithinRoot(bundleDir, indexPath); err != nil {
+		return err
+	}
 
 	targetFilename := filepath.Base(c.Path)
 	targetTitle := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(c.Title, "\r", " "), "\n", " "))
@@ -195,6 +201,12 @@ func resolveInBundle(bundleDir, relPath string) (string, error) {
 	if rel == "." || rel == "index.md" || rel == "log.md" {
 		return "", fmt.Errorf("cannot write concept to reserved bundle file %q", rel)
 	}
+
+	// Security: prevent symlink-based path traversal and arbitrary file overwrite
+	if _, err := ensureWithinRoot(bundleDir, full); err != nil {
+		return "", err
+	}
+
 	return full, nil
 }
 
