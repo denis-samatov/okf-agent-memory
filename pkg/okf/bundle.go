@@ -169,6 +169,7 @@ func LoadBundle(root string) (*Bundle, error) {
 			}
 		}
 
+		// #nosec G122,G304 -- path is strictly within bundle root and symlinks are resolved via ensureWithinRoot
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err

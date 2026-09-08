@@ -58,6 +58,7 @@ func AppendLogEntry(bundleDir, entryType, description string) error {
 	newEntry := fmt.Sprintf("* **%s**: %s\n", entryType, description)
 
 	existingContent := ""
+	// #nosec G304 -- logPath is guaranteed within bundleDir via ensureWithinRoot
 	if data, err := os.ReadFile(logPath); err == nil {
 		existingContent = string(data)
 	}
@@ -71,6 +72,7 @@ func AppendLogEntry(bundleDir, entryType, description string) error {
 		existingContent = heading + newEntry + "\n" + strings.TrimLeft(existingContent, "\n")
 	}
 
+	// #nosec G703 -- logPath is validated and contained within bundle root
 	return os.WriteFile(logPath, []byte(existingContent), 0o644)
 }
 
@@ -154,6 +156,7 @@ func UpdateParentIndex(bundleDir string, c *Concept) error {
 	}
 
 	existingContent := ""
+	// #nosec G304 -- indexPath is validated within bundleDir via ensureWithinRoot
 	if data, err := os.ReadFile(indexPath); err == nil {
 		existingContent = string(data)
 	} else {
@@ -182,6 +185,7 @@ func UpdateParentIndex(bundleDir string, c *Concept) error {
 		existingContent = strings.TrimRight(existingContent, "\n") + "\n" + newListing + "\n"
 	}
 
+	// #nosec G703 -- indexPath is verified within bundleDir
 	return os.WriteFile(indexPath, []byte(existingContent), 0o644)
 }
 
