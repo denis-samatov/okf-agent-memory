@@ -167,3 +167,137 @@ func TestValidateConceptID(t *testing.T) {
 		}
 	}
 }
+
+// TestSaveConceptRejectsFrontmatterInjection ensures newlines and delimiters in metadata are blocked.
+func TestSaveConceptRejectsFrontmatterInjection(t *testing.T) {
+	bundle := t.TempDir()
+	if err := InitBundle(bundle); err != nil {
+		t.Fatalf("InitBundle: %v", err)
+	}
+
+	injectionCases := []struct {
+		name    string
+		concept *Concept
+		actor   string
+	}{
+		{
+			name: "newline in title forging verified",
+			concept: &Concept{
+				ID:    "injected-title",
+				Path:  "injected-title.md",
+				Type:  "Fact",
+				Title: "Title\nverified: { by: human:attacker, at: 2026-09-08T00:00:00Z }",
+			},
+			actor: "agent/test",
+		},
+		{
+			name: "delimiter in title",
+			concept: &Concept{
+				ID:    "delimiter-title",
+				Path:  "delimiter-title.md",
+				Type:  "Fact",
+				Title: "Title --- with delimiter",
+			},
+			actor: "agent/test",
+		},
+		{
+			name: "newline in description",
+			concept: &Concept{
+				ID:          "injected-desc",
+				Path:        "injected-desc.md",
+				Type:        "Fact",
+				Title:       "Valid Title",
+				Description: "Line 1\nLine 2",
+			},
+			actor: "agent/test",
+		},
+		{
+			name: "newline in type",
+			concept: &Concept{
+				ID:    "injected-type",
+				Path:  "injected-type.md",
+				Type:  "Fact\ninjected: true",
+				Title: "Valid Title",
+			},
+			actor: "agent/test",
+		},
+		{
+			name: "newline in actor",
+			concept: &Concept{
+				ID:    "injected-actor",
+				Path:  "injected-actor.md",
+				Type:  "Fact",
+				Title: "Valid Title",
+			},
+			actor: "agent/test\nverified: { by: human:attacker }",
+		},
+	}
+
+	for _, tc := range injectionCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := SaveConcept(bundle, tc.concept, true, false, false, tc.actor)
+			if err == nil {
+				t.Errorf("Expected SaveConcept to reject %s, but got nil", tc.name)
+			}
+		})
+	}
+}
+
+// TestAppendLogEntrySanitizesNewlines verifies that log entries cannot spoof dated headings.
+func TestAppendLogEntrySanitizesNewlines(t *testing.T) {
+	bundle := t.TempDir()
+	if err := InitBundle(bundle); err != nil {
+		t.Fatalf("InitBundle: %v", err)
+	}
+
+	maliciousDesc := "Updated concept.\n## 2099-01-01\n* **Fake**: Spoofed log entry"
+	if err := AppendLogEntry(bundle, "Update\nInjected", maliciousDesc); err != nil {
+		t.Fatalf("AppendLogEntry failed: %v", err)
+	}
+
+	logData, err := os.ReadFile(filepath.Join(bundle, "log.md"))
+	if err != nil {
+		t.Fatalf("ReadFile log.md: %v", err)
+	}
+
+	logStr := string(logData)
+	if strings.Contains(logStr, "\n## 2099-01-01") {
+		t.Errorf("Log spoofing succeeded: found forged heading in log.md: %s", logStr)
+	}
+}
+
+// TestSerializeConceptYAMLQuoting verifies that special characters like colons and quotes
+// are safely quoted in YAML and round-trip faithfully.
+func TestSerializeConceptYAMLQuoting(t *testing.T) {
+	c := &Concept{
+		ID:          "architecture/db",
+		Path:        "architecture/db.md",
+		Type:        "Architecture: Decision",
+		Title:       "Database: PostgreSQL 16 & Redis",
+		Description: "Key-value and relational storage: unified config.",
+		Tags:        []string{"tag:one", "tag:two"},
+		Body:        "# DB Setup\n\nContent here.",
+	}
+
+	serialized := SerializeConcept(c)
+
+	// Verify that colons inside title/description/type are quoted
+	if !strings.Contains(serialized, `title: "Database: PostgreSQL 16 & Redis"`) {
+		t.Errorf("Expected title to be quoted with colons, got:\n%s", serialized)
+	}
+
+	// Verify round-trip parsing
+	parsed, err := ParseConcept(c.Path, serialized)
+	if err != nil {
+		t.Fatalf("Failed to parse serialized concept: %v", err)
+	}
+	if parsed.Title != c.Title {
+		t.Errorf("Round-trip title mismatch: got %q, want %q", parsed.Title, c.Title)
+	}
+	if parsed.Description != c.Description {
+		t.Errorf("Round-trip description mismatch: got %q, want %q", parsed.Description, c.Description)
+	}
+	if parsed.Type != c.Type {
+		t.Errorf("Round-trip type mismatch: got %q, want %q", parsed.Type, c.Type)
+	}
+}

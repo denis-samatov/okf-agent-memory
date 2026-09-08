@@ -47,6 +47,9 @@ func InitBundle(dir string) error {
 
 // AppendLogEntry prepends a new dated change entry to log.md.
 func AppendLogEntry(bundleDir, entryType, description string) error {
+	entryType = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(entryType, "\r", " "), "\n", " "))
+	description = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(description, "\r", " "), "\n", " "))
+
 	logPath := filepath.Join(bundleDir, "log.md")
 	today := time.Now().UTC().Format("2006-01-02")
 	newEntry := fmt.Sprintf("* **%s**: %s\n", entryType, description)
@@ -89,6 +92,7 @@ func ValidateConceptID(id string) error {
 	parts := strings.FieldsFunc(cleanID, func(r rune) bool {
 		return r == '/' || r == '\\'
 	})
+
 	if slices.Contains(parts, "..") {
 		return fmt.Errorf("concept ID %q contains forbidden '..' traversal", id)
 	}
@@ -127,11 +131,11 @@ func UpdateParentIndex(bundleDir string, c *Concept) error {
 	}
 
 	targetFilename := filepath.Base(c.Path)
-	targetTitle := c.Title
+	targetTitle := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(c.Title, "\r", " "), "\n", " "))
 	if targetTitle == "" {
 		targetTitle = targetFilename
 	}
-	targetDesc := c.Description
+	targetDesc := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(c.Description, "\r", " "), "\n", " "))
 
 	newListing := fmt.Sprintf("* [%s](%s) - %s", targetTitle, targetFilename, targetDesc)
 	if targetDesc == "" {
@@ -194,6 +198,35 @@ func resolveInBundle(bundleDir, relPath string) (string, error) {
 	return full, nil
 }
 
+// sanitizeConceptMetadata validates that concept metadata fields do not contain
+// newlines or frontmatter delimiters that could lead to YAML injection or delimiter smuggling.
+func sanitizeConceptMetadata(c *Concept) error {
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"type", c.Type},
+		{"title", c.Title},
+		{"description", c.Description},
+	}
+	if c.Generated != nil {
+		fields = append(fields, struct {
+			name  string
+			value string
+		}{"actor", c.Generated.By})
+	}
+
+	for _, f := range fields {
+		if strings.ContainsAny(f.value, "\r\n") {
+			return fmt.Errorf("concept %s cannot contain newlines", f.name)
+		}
+		if strings.Contains(f.value, "---") {
+			return fmt.Errorf("concept %s cannot contain frontmatter delimiter '---'", f.name)
+		}
+	}
+	return nil
+}
+
 // SaveConcept writes a concept file to disk and optionally executes automatic bookkeeping.
 func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, actor string) error {
 	fullPath, err := resolveInBundle(bundleDir, c.Path)
@@ -201,18 +234,21 @@ func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, a
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
 	// Update generated timestamp & actor
 	if actor == "" {
 		actor = "agent/okf-tool"
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
 	c.Generated = &Generated{
 		By: actor,
-		At: now,
+		At: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if err := sanitizeConceptMetadata(c); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	raw := SerializeConcept(c)
@@ -244,6 +280,8 @@ func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, a
 
 // RelateConcepts creates a relative markdown link between source and target concepts.
 func RelateConcepts(bundleDir, sourceID, targetID, relationDesc, actor string) error {
+	relationDesc = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(relationDesc, "\r", " "), "\n", " "))
+
 	b, err := LoadBundle(bundleDir)
 	if err != nil {
 		return fmt.Errorf("failed to load bundle: %w", err)

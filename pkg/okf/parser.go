@@ -2,6 +2,8 @@ package okf
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -49,7 +51,14 @@ func ExtractFrontmatter(content string) (frontmatter, body string, hasFM bool) {
 func unquote(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) >= 2 {
-		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+		if s[0] == '"' && s[len(s)-1] == '"' {
+			var unquoted string
+			if err := json.Unmarshal([]byte(s), &unquoted); err == nil {
+				return unquoted
+			}
+			return strings.TrimSpace(s[1 : len(s)-1])
+		}
+		if s[0] == '\'' && s[len(s)-1] == '\'' {
 			return strings.TrimSpace(s[1 : len(s)-1])
 		}
 	}
@@ -288,58 +297,85 @@ func parseListOfMappings(lines []string) []map[string]string {
 	return out
 }
 
+// safeYAMLString sanitizes a string scalar for inclusion in YAML frontmatter.
+// If the string contains newlines, quotes, colons, or YAML special characters,
+// it is JSON-quoted to prevent frontmatter injection and syntax errors.
+func safeYAMLString(s string) string {
+	if s == "" {
+		return ""
+	}
+	needsQuote := strings.ContainsAny(s, "\n\r\":{}[]#&*!|>'%@`,?") ||
+		strings.HasPrefix(s, "-") ||
+		strings.HasPrefix(s, " ") ||
+		strings.HasSuffix(s, " ")
+
+	if needsQuote {
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(s); err == nil {
+			return strings.TrimSpace(buf.String())
+		}
+	}
+	return s
+}
+
 // SerializeConcept converts a Concept into standard OKF Markdown with YAML frontmatter.
 func SerializeConcept(c *Concept) string {
 	var sb strings.Builder
 	sb.WriteString("---\n")
-	fmt.Fprintf(&sb, "type: %s\n", c.Type)
+	fmt.Fprintf(&sb, "type: %s\n", safeYAMLString(c.Type))
 
 	if c.Title != "" {
-		fmt.Fprintf(&sb, "title: %s\n", c.Title)
+		fmt.Fprintf(&sb, "title: %s\n", safeYAMLString(c.Title))
 	}
 	if c.Description != "" {
-		fmt.Fprintf(&sb, "description: %s\n", c.Description)
+		fmt.Fprintf(&sb, "description: %s\n", safeYAMLString(c.Description))
 	}
 	if c.Resource != "" {
-		fmt.Fprintf(&sb, "resource: %s\n", c.Resource)
+		fmt.Fprintf(&sb, "resource: %s\n", safeYAMLString(c.Resource))
 	}
 	if len(c.Tags) > 0 {
-		fmt.Fprintf(&sb, "tags: [%s]\n", strings.Join(c.Tags, ", "))
+		quotedTags := make([]string, len(c.Tags))
+		for i, t := range c.Tags {
+			quotedTags[i] = safeYAMLString(t)
+		}
+		fmt.Fprintf(&sb, "tags: [%s]\n", strings.Join(quotedTags, ", "))
 	}
 	if c.Generated != nil {
-		fmt.Fprintf(&sb, "generated: { by: %s, at: %s }\n", c.Generated.By, c.Generated.At)
+		fmt.Fprintf(&sb, "generated: { by: %s, at: %s }\n", safeYAMLString(c.Generated.By), safeYAMLString(c.Generated.At))
 	}
 	if len(c.Verified) > 0 {
 		if len(c.Verified) == 1 {
-			fmt.Fprintf(&sb, "verified: { by: %s, at: %s }\n", c.Verified[0].By, c.Verified[0].At)
+			fmt.Fprintf(&sb, "verified: { by: %s, at: %s }\n", safeYAMLString(c.Verified[0].By), safeYAMLString(c.Verified[0].At))
 		} else {
 			sb.WriteString("verified:\n")
 			for _, v := range c.Verified {
-				fmt.Fprintf(&sb, "  - { by: %s, at: %s }\n", v.By, v.At)
+				fmt.Fprintf(&sb, "  - { by: %s, at: %s }\n", safeYAMLString(v.By), safeYAMLString(v.At))
 			}
 		}
 	}
 	if c.Status != "" {
-		fmt.Fprintf(&sb, "status: %s\n", c.Status)
+		fmt.Fprintf(&sb, "status: %s\n", safeYAMLString(c.Status))
 	}
 	if c.StaleAfter != "" {
-		fmt.Fprintf(&sb, "stale_after: %s\n", c.StaleAfter)
+		fmt.Fprintf(&sb, "stale_after: %s\n", safeYAMLString(c.StaleAfter))
 	}
 	if len(c.Sources) > 0 {
 		sb.WriteString("sources:\n")
 		for _, s := range c.Sources {
-			fmt.Fprintf(&sb, "  - resource: %s\n", s.Resource)
+			fmt.Fprintf(&sb, "  - resource: %s\n", safeYAMLString(s.Resource))
 			if s.ID != "" {
-				fmt.Fprintf(&sb, "    id: %s\n", s.ID)
+				fmt.Fprintf(&sb, "    id: %s\n", safeYAMLString(s.ID))
 			}
 			if s.Title != "" {
-				fmt.Fprintf(&sb, "    title: %s\n", s.Title)
+				fmt.Fprintf(&sb, "    title: %s\n", safeYAMLString(s.Title))
 			}
 			if s.Author != "" {
-				fmt.Fprintf(&sb, "    author: %s\n", s.Author)
+				fmt.Fprintf(&sb, "    author: %s\n", safeYAMLString(s.Author))
 			}
 			if s.LastModified != "" {
-				fmt.Fprintf(&sb, "    last_modified: %s\n", s.LastModified)
+				fmt.Fprintf(&sb, "    last_modified: %s\n", safeYAMLString(s.LastModified))
 			}
 			if s.UsageCount > 0 {
 				fmt.Fprintf(&sb, "    usage_count: %d\n", s.UsageCount)
