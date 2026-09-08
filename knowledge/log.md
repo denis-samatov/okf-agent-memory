@@ -1,4 +1,6 @@
 ## 2026-09-08
+* **Update**: Linked `architecture/layers.md` and `convention/contributing.md` to `convention/coding-standards.md`.
+* **Creation**: Documented concept `convention/coding-standards.md` (Engineering & Coding Best Practices (Clean Code, TDD, DRY)).
 * **Update**: Linked `convention/contributing.md` to `convention/security-audit.md` (Continuous security audit expectations and integration pipeline).
 * **Update**: Updated `architecture/security-boundaries.md` documenting case-insensitive reserved root file protection and collaborative file permission rationale (`0o644`/`0o755`).
 * **Creation**: Documented concept `convention/security-audit.md` (Automated Security Auditing & Jules Remediation Workflow).
