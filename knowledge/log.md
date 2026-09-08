@@ -1,4 +1,5 @@
 ## 2026-09-08
+* **Release**: Published version v0.1.3 — Security Hardening Release resolving path traversal in concept creation/bookkeeping (reported by @djmaze), symlink following (LFI/overwrite), MCP server root confinement, YAML metadata smuggling, and establishing the continuous adversarial security audit framework.
 * **Update**: Linked `architecture/security-boundaries.md` to `convention/mcp-agent-safety.md` (Behavioral MCP guidelines complement deterministic boundaries).
 * **Update**: Updated concept `architecture/security-boundaries.md`.
 * **Update**: Linked `convention/principles.md` to `convention/mcp-agent-safety.md` (Principles require secure tool interaction and treating agent input as untrusted).
