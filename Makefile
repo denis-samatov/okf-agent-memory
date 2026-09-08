@@ -1,4 +1,4 @@
-.PHONY: all build test check validate validate-examples validate-all fmt vet lint vuln audit-security clean release dist-bundle benchmark help
+.PHONY: all build build-benchmark install test fmt vet lint vuln audit-security validate validate-examples validate-all check release dist-bundle benchmark clean help
 
 BIN := bin/okf
 BUNDLE := knowledge
@@ -12,19 +12,12 @@ RELEASE_LDFLAGS := -s -w $(LDFLAGS)
 
 all: help
 
-## build: Compile the standalone Go CLI and MCP server binary
-build:
-	@mkdir -p bin
-	@go build -ldflags="$(LDFLAGS)" -o $(BIN) ./cmd/okf
+## ----------------------------------------------------------------------
+## Pipeline & Verification
+## ----------------------------------------------------------------------
 
-## build-benchmark: Compile bin/okf-benchmark executable
-build-benchmark:
-	@mkdir -p bin
-	@go build -ldflags="$(LDFLAGS)" -o bin/okf-benchmark ./cmd/okf-benchmark
-
-## install: Install the binary to $GOPATH/bin
-install:
-	go install -ldflags="$(LDFLAGS)" ./cmd/okf
+## check: Run the complete CI/local pipeline (fmt, vet, lint, test, validate-all)
+check: fmt vet lint test validate-all
 
 ## test: Run all Go unit and integration tests
 test:
@@ -38,19 +31,37 @@ fmt:
 vet:
 	@go vet ./...
 
-## lint: Run golangci-lint static analysis
+## lint: Run golangci-lint static analysis (falls back to go vet)
 lint:
 	@which golangci-lint > /dev/null && golangci-lint run ./... || go vet ./...
-
-## vuln: Run govulncheck vulnerability analysis
-vuln:
-	@govulncheck ./...
 
 ## audit-security: Run automated security analysis (gosec and govulncheck)
 audit-security:
 	@echo "==> Running security checks..."
 	@which gosec > /dev/null && gosec -quiet -exclude-dir=examples ./... || echo "gosec: optional (install via: go install github.com/securego/gosec/v2/cmd/gosec@latest)"
 	@which govulncheck > /dev/null && govulncheck ./... || echo "govulncheck: optional (install via: go install golang.org/x/vuln/cmd/govulncheck@latest)"
+
+## vuln: Run govulncheck vulnerability scanner directly
+vuln:
+	@govulncheck ./...
+
+## ----------------------------------------------------------------------
+## Build & OKF Knowledge Validation
+## ----------------------------------------------------------------------
+
+## build: Compile the standalone Go CLI and MCP server binary
+build:
+	@mkdir -p bin
+	@go build -ldflags="$(LDFLAGS)" -o $(BIN) ./cmd/okf
+
+## build-benchmark: Compile bin/okf-benchmark executable
+build-benchmark:
+	@mkdir -p bin
+	@go build -ldflags="$(LDFLAGS)" -o bin/okf-benchmark ./cmd/okf-benchmark
+
+## install: Install bin/okf to $GOPATH/bin
+install:
+	@go install -ldflags="$(LDFLAGS)" ./cmd/okf
 
 ## validate: Run strict OKF v0.2 validation on the knowledge/ bundle
 validate: build
@@ -65,8 +76,9 @@ validate-examples: build
 ## validate-all: Validate project knowledge and all examples
 validate-all: validate validate-examples
 
-## check: Run formatting, vet, unit tests, and all bundle validations
-check: fmt vet test validate validate-examples
+## ----------------------------------------------------------------------
+## Release & Packaging
+## ----------------------------------------------------------------------
 
 ## release: Cross-compile binaries for macOS, Linux, and Windows
 release:
@@ -84,7 +96,7 @@ release:
 dist-bundle: build
 	@mkdir -p $(DIST_DIR)/okf-starter-pack
 	@$(BIN) bootstrap $(DIST_DIR)/okf-starter-pack --name "Project"
-	@cp $(BIN) $(DIST_DIR)/okf-starter-pack/bin/okf 2>/dev/null || (mkdir -p $(DIST_DIR)/okf-starter-pack/bin && cp $(BIN) $(DIST_DIR)/okf-starter-pack/bin/okf)
+	@mkdir -p $(DIST_DIR)/okf-starter-pack/bin && cp $(BIN) $(DIST_DIR)/okf-starter-pack/bin/okf
 	@tar -czf $(DIST_DIR)/okf-starter-pack-v$(VERSION).tar.gz -C $(DIST_DIR) okf-starter-pack
 	@cd $(DIST_DIR) && zip -q -r okf-starter-pack-v$(VERSION).zip okf-starter-pack
 	@echo "Created $(DIST_DIR)/okf-starter-pack-v$(VERSION).tar.gz and .zip"
@@ -97,24 +109,27 @@ benchmark:
 clean:
 	@rm -rf bin $(DIST_DIR)
 
+## help: Display available targets
 help:
 	@echo "OKF Agent Memory Makefile"
 	@echo ""
-	@echo "Targets:"
-	@echo "  make build             Compile bin/okf executable"
-	@echo "  make build-benchmark   Compile bin/okf-benchmark executable"
-	@echo "  make install           Install bin/okf to \$$GOPATH/bin"
+	@echo "Pipeline:"
+	@echo "  make check             Run complete pipeline (fmt, vet, lint, test, validate-all)"
 	@echo "  make test              Run Go unit tests"
-	@echo "  make fmt               Format code with gofumpt"
+	@echo "  make fmt               Format code with gofumpt / gofmt"
 	@echo "  make vet               Run go vet static analysis"
-	@echo "  make lint              Run golangci-lint"
-	@echo "  make vuln              Run govulncheck vulnerability scanner"
-	@echo "  make validate          Run strict OKF v0.2 validation on knowledge/"
-	@echo "  make validate-examples Run strict validation on example corpora"
+	@echo "  make lint              Run golangci-lint (fallback: go vet)"
+	@echo "  make audit-security    Run automated security audit (gosec, govulncheck)"
+	@echo ""
+	@echo "Build & Knowledge:"
+	@echo "  make build             Compile bin/okf executable"
+	@echo "  make install           Install bin/okf to \$$GOPATH/bin"
+	@echo "  make validate          Validate knowledge/ bundle (--strict --drift)"
+	@echo "  make validate-examples Validate all example corpora"
 	@echo "  make validate-all      Validate knowledge/ and all examples"
-	@echo "  make check             Run vet, tests, and all validations"
-	@echo "  make benchmark         Run local LLM benchmark (ARGS=\"-dry-run\" or ARGS=\"-o\")"
+	@echo ""
+	@echo "Distribution:"
 	@echo "  make release           Cross-compile binaries for macOS, Linux, and Windows"
-	@echo "  make dist-bundle       Build standalone starter pack archives (.tar.gz & .zip)"
+	@echo "  make dist-bundle       Build starter pack archives (.tar.gz & .zip)"
 	@echo "  make clean             Remove build and dist artifacts"
 	@echo "  make help              Display this help message"
