@@ -37,7 +37,21 @@ Ensure:
 - ✅ Zero lint or vet errors
 - ✅ 0 bundle validation errors, 0 broken links, 0 orphaned concepts across `knowledge/` and `examples/`
 
-### Step 2: Ensure Working Directory is Clean
+### Step 2: Security & Adversarial Audit Gate (MANDATORY)
+Run automated security analysis and perform an adversarial review before every release:
+
+```bash
+# Run automated security linters and vulnerability checks
+make audit-security
+```
+
+- **Conduct Security Specialist Agent Review**:
+  - Extract the diff for the upcoming release against the previous tag:
+    `git diff <previous-tag>..HEAD` (e.g. `git diff v0.1.2..HEAD`)
+  - Instruct a Security Specialist Agent using [`docs/SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) to audit the diff against all 4 audit areas.
+  - Require a report status of **"Passed (0 High/Critical)"** before proceeding to Step 3.
+
+### Step 3: Ensure Working Directory is Clean
 ```bash
 git status
 ```

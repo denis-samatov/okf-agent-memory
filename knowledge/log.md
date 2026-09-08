@@ -1,4 +1,9 @@
 ## 2026-09-08
+* **Update**: Linked `architecture/security-boundaries.md` to `convention/mcp-agent-safety.md` (Behavioral MCP guidelines complement deterministic boundaries).
+* **Update**: Updated concept `architecture/security-boundaries.md`.
+* **Update**: Linked `convention/principles.md` to `convention/mcp-agent-safety.md` (Principles require secure tool interaction and treating agent input as untrusted).
+* **Update**: Updated concept `convention/principles.md`.
+* **Creation**: Documented concept `convention/mcp-agent-safety.md` (MCP Tool Security & Untrusted Agent Input).
 * **Update**: Linked `architecture/layers.md` to `architecture/security-boundaries.md` (Layer 4 tooling enforces security boundaries and bundle isolation).
 * **Update**: Updated concept `architecture/layers.md`.
 * **Update**: Linked `architecture/tooling-decision.md` to `architecture/security-boundaries.md` (Tooling layer enforces security and bundle containment boundaries).

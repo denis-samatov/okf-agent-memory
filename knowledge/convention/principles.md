@@ -4,7 +4,7 @@ title: Core Memory Principles & Agent Contract
 description: Foundational design principles and minimal behavioral guarantees for agents maintaining persistent project memory.
 resource: https://github.com/okf-memory/okf-agent-memory
 tags: [convention, principles, contract, agent-rules]
-generated: { by: agent/cli, at: 2026-09-04T08:43:46Z }
+generated: { by: agent/mcp, at: 2026-09-08T07:51:26Z }
 status: stable
 sources:
   - resource: ../../docs/CONVENTION.md
@@ -38,3 +38,4 @@ The convention intentionally avoids prescribing a fixed taxonomy. Projects may d
 
 # Related Concepts
 - [Contributor Guidelines & PR Standards](contributing.md): PR contributors must adhere to these core memory principles
+- [MCP Tool Security & Untrusted Agent Input](mcp-agent-safety.md): Principles require secure tool interaction and treating agent input as untrusted

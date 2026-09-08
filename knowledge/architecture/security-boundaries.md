@@ -2,7 +2,7 @@
 type: Decision
 title: Bundle Isolation and Mutation Security Boundaries
 description: Defensive security architecture enforcing canonical bundle boundaries, symlink containment, path traversal prevention, and frontmatter injection defense.
-generated: { by: agent/mcp, at: 2026-09-08T07:42:41Z }
+generated: { by: agent/mcp, at: 2026-09-08T07:51:29Z }
 ---
 
 # Bundle Isolation and Mutation Security Boundaries
@@ -41,3 +41,6 @@ The stdio Model Context Protocol (MCP) server confines dynamic bundle switching:
 
 - Defined as part of Layer 4 in [layers](layers.md).
 - Complements the deterministic single-binary tooling in [tooling-decision](tooling-decision.md).
+
+# Related Concepts
+- [MCP Tool Security & Untrusted Agent Input](../convention/mcp-agent-safety.md): Behavioral MCP guidelines complement deterministic boundaries

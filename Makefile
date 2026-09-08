@@ -1,4 +1,4 @@
-.PHONY: all build test check validate validate-examples validate-all fmt vet lint vuln clean release dist-bundle benchmark help
+.PHONY: all build test check validate validate-examples validate-all fmt vet lint vuln audit-security clean release dist-bundle benchmark help
 
 BIN := bin/okf
 BUNDLE := knowledge
@@ -45,6 +45,12 @@ lint:
 ## vuln: Run govulncheck vulnerability analysis
 vuln:
 	@govulncheck ./...
+
+## audit-security: Run automated security analysis (gosec and govulncheck)
+audit-security:
+	@echo "==> Running security checks..."
+	@which gosec > /dev/null && gosec -quiet -exclude-dir=examples ./... || echo "gosec: optional (install via: go install github.com/securego/gosec/v2/cmd/gosec@latest)"
+	@which govulncheck > /dev/null && govulncheck ./... || echo "govulncheck: optional (install via: go install golang.org/x/vuln/cmd/govulncheck@latest)"
 
 ## validate: Run strict OKF v0.2 validation on the knowledge/ bundle
 validate: build
