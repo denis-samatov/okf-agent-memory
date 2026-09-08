@@ -435,4 +435,3 @@ func TestSaveConceptRejectsDirectorySymlinkEscape(t *testing.T) {
 		t.Errorf("Expected path traversal error message, got: %v", err)
 	}
 }
-
