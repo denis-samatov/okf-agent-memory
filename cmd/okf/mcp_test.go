@@ -285,6 +285,41 @@ func TestMCPCreate_PathTraversalDenied(t *testing.T) {
 	}
 }
 
+func TestMCPCreate_ValidationAndReservedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	bundleDir := filepath.Join(tmpDir, "bundle")
+	_ = os.MkdirAll(bundleDir, 0o755)
+	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Bundle\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
+
+	inputs := []string{
+		// 1. Missing required field 'type'
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"valid-id","title":"Title","description":"Desc"}}}`,
+		// 2. Whitespace-only 'title'
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"valid-id","type":"Fact","title":"   ","description":"Desc"}}}`,
+		// 3. Attempt to create AGENTS.md
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"AGENTS","type":"Fact","title":"Agents","description":"Desc"}}}`,
+		// 4. Attempt to create AGENTS.md with lower case
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"agents.md","type":"Fact","title":"Agents","description":"Desc"}}}`,
+	}
+
+	responses := runMCPConversation(t, bundleDir, inputs)
+	if len(responses) != len(inputs) {
+		t.Fatalf("Expected %d responses, got %d", len(inputs), len(responses))
+	}
+
+	for i, r := range responses {
+		rMap, ok := r.Result.(map[string]any)
+		if !ok {
+			t.Fatalf("Response %d has unexpected result type: %T", i+1, r.Result)
+		}
+		isError, _ := rMap["isError"].(bool)
+		if !isError {
+			t.Errorf("Expected response %d to have isError: true, got: %+v", i+1, rMap)
+		}
+	}
+}
+
 func TestMCPBundle_PathTraversalDenied(t *testing.T) {
 	tmpDir := t.TempDir()
 	serverRoot := filepath.Join(tmpDir, "server")

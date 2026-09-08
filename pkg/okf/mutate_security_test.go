@@ -95,15 +95,15 @@ func TestSaveConceptAllowsNestedConcept(t *testing.T) {
 	}
 }
 
-// TestSaveConceptRejectsReservedRootFiles ensures index.md and log.md cannot be
-// overwritten as concept documents.
+// TestSaveConceptRejectsReservedRootFiles ensures index.md, log.md, and AGENTS.md cannot be
+// overwritten as concept documents regardless of letter case.
 func TestSaveConceptRejectsReservedRootFiles(t *testing.T) {
 	bundle := t.TempDir()
 	if err := InitBundle(bundle); err != nil {
 		t.Fatalf("InitBundle: %v", err)
 	}
 
-	for _, reserved := range []string{"index.md", "log.md", "."} {
+	for _, reserved := range []string{"index.md", "log.md", "AGENTS.md", "INDEX.MD", "Log.MD", "agents.md", "."} {
 		c := &Concept{
 			ID:    strings.TrimSuffix(reserved, ".md"),
 			Path:  reserved,
@@ -143,8 +143,13 @@ func TestValidateConceptID(t *testing.T) {
 		"sub/../../escaped",
 		"index",
 		"log",
+		"AGENTS",
 		"index.md",
 		"log.md",
+		"AGENTS.md",
+		"INDEX.MD",
+		"Log.MD",
+		"agents.md",
 		"",
 		".",
 		"..",

@@ -107,7 +107,8 @@ func ValidateConceptID(id string) error {
 	}
 
 	// Check for reserved root filenames
-	if cleaned == "index" || cleaned == "log" {
+	if strings.EqualFold(cleaned, "index") || strings.EqualFold(cleaned, "log") || strings.EqualFold(cleaned, "AGENTS") ||
+		strings.EqualFold(cleaned, "index.md") || strings.EqualFold(cleaned, "log.md") || strings.EqualFold(cleaned, "AGENTS.md") {
 		return fmt.Errorf("concept ID %q is a reserved bundle root document", id)
 	}
 
@@ -134,6 +135,10 @@ func UpdateParentIndex(bundleDir string, c *Concept) error {
 	}
 	if _, err := ensureWithinRoot(bundleDir, indexPath); err != nil {
 		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(indexPath), 0o755); err != nil {
+		return fmt.Errorf("failed to create directory for parent index %q: %w", indexRelPath, err)
 	}
 
 	targetFilename := filepath.Base(c.Path)
@@ -198,8 +203,9 @@ func resolveInBundle(bundleDir, relPath string) (string, error) {
 		return "", fmt.Errorf("path traversal denied: concept path %q escapes bundle directory", relPath)
 	}
 	// Disallow overwriting root reserved files as concept documents
-	if rel == "." || rel == "index.md" || rel == "log.md" {
-		return "", fmt.Errorf("cannot write concept to reserved bundle file %q", rel)
+	if rel == "." || cleanRel == "." || strings.EqualFold(rel, "index.md") || strings.EqualFold(rel, "log.md") || strings.EqualFold(rel, "AGENTS.md") ||
+		strings.EqualFold(cleanRel, "index.md") || strings.EqualFold(cleanRel, "log.md") || strings.EqualFold(cleanRel, "AGENTS.md") {
+		return "", fmt.Errorf("cannot write concept to reserved bundle file %q", relPath)
 	}
 
 	// Security: prevent symlink-based path traversal and arbitrary file overwrite

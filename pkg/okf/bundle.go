@@ -271,11 +271,11 @@ func (b *Bundle) buildGraph() {
 			targetRel := targetID + ".md"
 			targetBase := path.Base(targetRel)
 
-			if targetBase == "index.md" || targetBase == "log.md" {
+			if strings.EqualFold(targetBase, "index.md") || strings.EqualFold(targetBase, "log.md") || strings.EqualFold(targetBase, "AGENTS.md") {
 				b.BrokenLinks = append(b.BrokenLinks, BrokenLink{
 					SourceConcept: concept.Path,
 					TargetHref:    href,
-					Reason:        "reserved index.md/log.md is navigation, not a concept",
+					Reason:        "reserved index.md/log.md/AGENTS.md is navigation, not a concept",
 				})
 				continue
 			}
