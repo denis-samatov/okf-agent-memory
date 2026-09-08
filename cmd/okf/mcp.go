@@ -396,19 +396,40 @@ func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, erro
 			absTarget = filepath.Join(s.rootDir, target)
 		}
 
-		evalTarget, err := filepath.EvalSymlinks(absTarget)
-		if err == nil {
-			absTarget, _ = filepath.Abs(evalTarget)
-		} else {
-			absTarget, _ = filepath.Abs(absTarget)
+		// Walk up to find the closest ancestor that exists and evaluate its symlinks
+		curr := absTarget
+		var missingParts []string
+		for {
+			_, lstatErr := os.Lstat(curr)
+			if lstatErr == nil {
+				break
+			}
+			missingParts = append([]string{filepath.Base(curr)}, missingParts...)
+			parent := filepath.Dir(curr)
+			if parent == curr {
+				break
+			}
+			curr = parent
 		}
 
-		rel, err := filepath.Rel(absRoot, absTarget)
+		realCurr, err := filepath.EvalSymlinks(curr)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve bundle path %q: %w", target, err)
+		}
+		realCurr, err = filepath.Abs(realCurr)
+		if err != nil {
+			return "", err
+		}
+
+		parts := append([]string{realCurr}, missingParts...)
+		realTarget := filepath.Join(parts...)
+
+		rel, err := filepath.Rel(absRoot, realTarget)
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return "", fmt.Errorf("bundle directory %q escapes server root %q", target, s.rootDir)
 		}
 
-		return absTarget, nil
+		return realTarget, nil
 	}
 
 	return target, nil

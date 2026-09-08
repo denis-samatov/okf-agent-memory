@@ -192,7 +192,9 @@ func LoadBundle(root string) (*Bundle, error) {
 		}
 
 		if name == "log.md" {
-			b.LogContent = content
+			if rel == "log.md" {
+				b.LogContent = content
+			}
 			return nil
 		}
 

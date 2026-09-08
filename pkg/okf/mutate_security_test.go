@@ -335,6 +335,108 @@ func TestLoadBundleRejectsExternalSymlinks(t *testing.T) {
 	}
 }
 
+// TestSaveConceptRejectsSubdirectoryReservedFiles verifies that reserved files (index.md anywhere, root log.md, root AGENTS.md)
+// cannot be targeted as concepts in subdirectories.
+func TestSaveConceptRejectsSubdirectoryReservedFiles(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	reservedPaths := []string{
+		"sub/index.md",
+		"sub/index",
+		"sub/dir/index.md",
+		"log.md",
+		"AGENTS.md",
+	}
+
+	for _, relPath := range reservedPaths {
+		c := &Concept{
+			ID:    strings.TrimSuffix(relPath, ".md"),
+			Path:  relPath,
+			Title: "Reserved Overwrite Attempt",
+			Type:  "Fact",
+		}
+		if err := SaveConcept(bundleDir, c, true, false, false, "attacker"); err == nil {
+			t.Errorf("SaveConcept(%q) expected error for reserved file, got nil", relPath)
+		}
+		if err := ValidateConceptID(c.ID); err == nil {
+			t.Errorf("ValidateConceptID(%q) expected error for reserved file, got nil", c.ID)
+		}
+	}
+}
+
+// TestSaveConceptRejectsSymlinkToReservedOrNonMarkdown verifies that SaveConcept refuses to write through symlinks
+// targeting reserved documents or non-markdown files within the bundle.
+func TestSaveConceptRejectsSymlinkToReservedOrNonMarkdown(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	// Create non-markdown file inside bundle
+	dataJsonPath := filepath.Join(bundleDir, "data.json")
+	if err := os.WriteFile(dataJsonPath, []byte(`{"key":"value"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile data.json: %v", err)
+	}
+
+	// Create symlink concept_link.md -> data.json
+	symlinkNonMD := filepath.Join(bundleDir, "concept_json.md")
+	if err := os.Symlink("data.json", symlinkNonMD); err != nil {
+		t.Skipf("Symlinks not supported: %v", err)
+	}
+
+	// Create symlink concept_index.md -> index.md
+	symlinkIndex := filepath.Join(bundleDir, "concept_index.md")
+	if err := os.Symlink("index.md", symlinkIndex); err != nil {
+		t.Skipf("Symlinks not supported: %v", err)
+	}
+
+	cJSON := &Concept{Path: "concept_json.md", Title: "JSON", Type: "Fact", Body: "PWNED"}
+	if err := SaveConcept(bundleDir, cJSON, false, false, false, "attacker"); err == nil {
+		t.Errorf("Expected SaveConcept through symlink to non-markdown file to fail, got nil")
+	}
+
+	cIndex := &Concept{Path: "concept_index.md", Title: "Index", Type: "Fact", Body: "PWNED"}
+	if err := SaveConcept(bundleDir, cIndex, false, false, false, "attacker"); err == nil {
+		t.Errorf("Expected SaveConcept through symlink to index.md to fail, got nil")
+	}
+
+	// Ensure index.md content was preserved
+	idxContent, _ := os.ReadFile(filepath.Join(bundleDir, "index.md"))
+	if strings.Contains(string(idxContent), "PWNED") {
+		t.Errorf("index.md was overwritten via symlink!")
+	}
+}
+
+// TestLoadBundleSubdirectoryLogIsolation verifies that a log.md in a subdirectory does not overwrite root LogContent.
+func TestLoadBundleSubdirectoryLogIsolation(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	subDir := filepath.Join(bundleDir, "sub")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	subLogPath := filepath.Join(subDir, "log.md")
+	if err := os.WriteFile(subLogPath, []byte("## 2000-01-01\n* Sub log\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile sub/log.md: %v", err)
+	}
+
+	b, err := LoadBundle(bundleDir)
+	if err != nil {
+		t.Fatalf("LoadBundle failed: %v", err)
+	}
+
+	if strings.Contains(b.LogContent, "Sub log") {
+		t.Errorf("Root LogContent was overwritten by sub/log.md: %s", b.LogContent)
+	}
+}
+
 // TestLoadBundleAllowsInternalSymlinks verifies that symlinks pointing within the bundle are allowed.
 func TestLoadBundleAllowsInternalSymlinks(t *testing.T) {
 	bundleDir := t.TempDir()

@@ -106,10 +106,13 @@ func ValidateConceptID(id string) error {
 		return fmt.Errorf("concept ID %q escapes bundle directory", id)
 	}
 
-	// Check for reserved root filenames
-	if strings.EqualFold(cleaned, "index") || strings.EqualFold(cleaned, "log") || strings.EqualFold(cleaned, "AGENTS") ||
-		strings.EqualFold(cleaned, "index.md") || strings.EqualFold(cleaned, "log.md") || strings.EqualFold(cleaned, "AGENTS.md") {
-		return fmt.Errorf("concept ID %q is a reserved bundle root document", id)
+	// Check for reserved filenames (index.md anywhere, root log.md, root AGENTS.md)
+	base := filepath.Base(cleaned)
+	normClean := filepath.ToSlash(cleaned)
+	if strings.EqualFold(base, "index") || strings.EqualFold(base, "index.md") ||
+		strings.EqualFold(normClean, "log") || strings.EqualFold(normClean, "log.md") ||
+		strings.EqualFold(normClean, "AGENTS") || strings.EqualFold(normClean, "AGENTS.md") {
+		return fmt.Errorf("concept ID %q is a reserved bundle document", id)
 	}
 
 	return nil
@@ -202,18 +205,40 @@ func resolveInBundle(bundleDir, relPath string) (string, error) {
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path traversal denied: concept path %q escapes bundle directory", relPath)
 	}
-	// Disallow overwriting root reserved files as concept documents
-	if rel == "." || cleanRel == "." || strings.EqualFold(rel, "index.md") || strings.EqualFold(rel, "log.md") || strings.EqualFold(rel, "AGENTS.md") ||
-		strings.EqualFold(cleanRel, "index.md") || strings.EqualFold(cleanRel, "log.md") || strings.EqualFold(cleanRel, "AGENTS.md") {
+	// Check reserved filenames on relative path (index.md anywhere, root log.md, root AGENTS.md)
+	relBase := filepath.Base(cleanRel)
+	normRel := filepath.ToSlash(rel)
+	if rel == "." || cleanRel == "." ||
+		strings.EqualFold(relBase, "index") || strings.EqualFold(relBase, "index.md") ||
+		strings.EqualFold(normRel, "log.md") || strings.EqualFold(normRel, "AGENTS.md") {
 		return "", fmt.Errorf("cannot write concept to reserved bundle file %q", relPath)
 	}
 
 	// Security: prevent symlink-based path traversal and arbitrary file overwrite
-	if _, err := ensureWithinRoot(bundleDir, full); err != nil {
+	realTarget, err := ensureWithinRoot(bundleDir, full)
+	if err != nil {
 		return "", err
 	}
 
-	return full, nil
+	// Check reserved filenames and file type on symlink-resolved target
+	targetBase := filepath.Base(realTarget)
+	realRoot, err := filepath.EvalSymlinks(bundleDir)
+	if err != nil {
+		realRoot, _ = filepath.Abs(bundleDir)
+	} else {
+		realRoot, _ = filepath.Abs(realRoot)
+	}
+	targetRel, _ := filepath.Rel(realRoot, realTarget)
+	targetRel = filepath.ToSlash(targetRel)
+
+	if strings.EqualFold(targetBase, "index.md") || strings.EqualFold(targetRel, "log.md") || strings.EqualFold(targetRel, "AGENTS.md") {
+		return "", fmt.Errorf("cannot write concept to reserved bundle file %q", relPath)
+	}
+	if !strings.HasSuffix(strings.ToLower(realTarget), ".md") {
+		return "", fmt.Errorf("concept target %q must be a markdown (.md) file", relPath)
+	}
+
+	return realTarget, nil
 }
 
 // sanitizeConceptMetadata validates that concept metadata fields do not contain

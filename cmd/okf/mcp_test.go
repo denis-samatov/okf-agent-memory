@@ -189,6 +189,76 @@ func TestMCPToolCalls(t *testing.T) {
 	}
 }
 
+func TestMCPBundle_SymlinkAncestorTraversalDenied(t *testing.T) {
+	tmpDir := t.TempDir()
+	serverRoot := filepath.Join(tmpDir, "server")
+	bundleDir := filepath.Join(serverRoot, "knowledge")
+	outsideDir := filepath.Join(tmpDir, "outside")
+
+	_ = os.MkdirAll(bundleDir, 0o755)
+	_ = os.MkdirAll(outsideDir, 0o755)
+	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Root\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
+
+	// Symlink inside serverRoot pointing to outsideDir
+	symlinkPath := filepath.Join(serverRoot, "sym_outside")
+	if err := os.Symlink(outsideDir, symlinkPath); err != nil {
+		t.Skipf("Symlinks not supported: %v", err)
+	}
+
+	inputs := []string{
+		// Attempt bundle creation via symlinked ancestor pointing outside serverRoot
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"sym_outside/nonexistent_bundle","concept_id":"evil","type":"Fact","title":"Evil","description":"Should fail"}}}`,
+	}
+
+	responses := runMCPConversation(t, bundleDir, inputs)
+	if len(responses) != 1 {
+		t.Fatalf("Expected 1 response, got %d", len(responses))
+	}
+
+	rMap, ok := responses[0].Result.(map[string]any)
+	if !ok {
+		t.Fatalf("Response result is not map[string]any: %T", responses[0].Result)
+	}
+	if isError, _ := rMap["isError"].(bool); !isError {
+		t.Errorf("Expected response to have isError: true, got: %+v", rMap)
+	}
+
+	// Verify nothing was created in outsideDir
+	entries, _ := os.ReadDir(outsideDir)
+	if len(entries) > 0 {
+		t.Fatalf("Security failure: files created in outside directory: %v", entries)
+	}
+}
+
+func TestMCPCreate_SubdirectoryReservedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	bundleDir := filepath.Join(tmpDir, "bundle")
+	_ = os.MkdirAll(bundleDir, 0o755)
+	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Bundle\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
+
+	inputs := []string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"sub/index","type":"Fact","title":"Sub Index","description":"Desc"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"sub/index.md","type":"Fact","title":"Sub Index MD","description":"Desc"}}}`,
+	}
+
+	responses := runMCPConversation(t, bundleDir, inputs)
+	if len(responses) != 2 {
+		t.Fatalf("Expected 2 responses, got %d", len(responses))
+	}
+
+	for i, r := range responses {
+		rMap, ok := r.Result.(map[string]any)
+		if !ok {
+			t.Fatalf("Response %d has unexpected result type: %T", i+1, r.Result)
+		}
+		if isError, _ := rMap["isError"].(bool); !isError {
+			t.Errorf("Expected response %d to have isError: true, got: %+v", i+1, rMap)
+		}
+	}
+}
+
 func TestMCPUnknownMethodAndParseError(t *testing.T) {
 	inputs := []string{
 		`invalid json line`,
