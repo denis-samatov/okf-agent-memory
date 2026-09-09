@@ -555,10 +555,18 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			return
 		}
 
-		if title, ok := callParams.Arguments["title"].(string); ok && title != "" {
+		if title, ok := callParams.Arguments["title"].(string); ok {
+			if strings.TrimSpace(title) == "" {
+				s.sendToolResult(req.ID, "Invalid title: argument 'title' cannot be empty or whitespace", true)
+				return
+			}
 			c.Title = title
 		}
-		if desc, ok := callParams.Arguments["description"].(string); ok && desc != "" {
+		if desc, ok := callParams.Arguments["description"].(string); ok {
+			if strings.TrimSpace(desc) == "" {
+				s.sendToolResult(req.ID, "Invalid description: argument 'description' cannot be empty or whitespace", true)
+				return
+			}
 			c.Description = desc
 		}
 		if body, ok := callParams.Arguments["body"].(string); ok && body != "" {

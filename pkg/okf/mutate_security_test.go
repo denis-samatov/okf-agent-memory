@@ -335,6 +335,36 @@ func TestLoadBundleRejectsExternalSymlinks(t *testing.T) {
 	}
 }
 
+// TestRelateConceptsSanitizesNewlines verifies that RelateConcepts sanitizes newlines in relationship descriptions.
+func TestRelateConceptsSanitizesNewlines(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	c1 := &Concept{ID: "concept-a", Path: "concept-a.md", Type: "Fact", Title: "Concept A", Body: "# Concept A\n"}
+	c2 := &Concept{ID: "concept-b", Path: "concept-b.md", Type: "Fact", Title: "Concept B", Body: "# Concept B\n"}
+	if err := SaveConcept(bundleDir, c1, true, false, true, "test"); err != nil {
+		t.Fatalf("SaveConcept c1: %v", err)
+	}
+	if err := SaveConcept(bundleDir, c2, true, false, true, "test"); err != nil {
+		t.Fatalf("SaveConcept c2: %v", err)
+	}
+
+	maliciousDesc := "Related context\n## 2099-01-01\n* **Fake**: Forged log entry"
+	if err := RelateConcepts(bundleDir, "concept-a", "concept-b", maliciousDesc, "attacker"); err != nil {
+		t.Fatalf("RelateConcepts: %v", err)
+	}
+
+	logData, err := os.ReadFile(filepath.Join(bundleDir, "log.md"))
+	if err != nil {
+		t.Fatalf("ReadFile log.md: %v", err)
+	}
+	if strings.Contains(string(logData), "\n## 2099-01-01") {
+		t.Errorf("RelateConcepts log spoofing succeeded: found forged header in log.md: %s", string(logData))
+	}
+}
+
 // TestSaveConceptRejectsSubdirectoryReservedFiles verifies that reserved files (index.md anywhere, root log.md, root AGENTS.md)
 // cannot be targeted as concepts in subdirectories.
 func TestSaveConceptRejectsSubdirectoryReservedFiles(t *testing.T) {
