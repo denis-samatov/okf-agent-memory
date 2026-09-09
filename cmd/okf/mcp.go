@@ -466,11 +466,15 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			limit = int(l)
 		}
 		results := b.Search(query, limit)
+		if results == nil {
+			results = []okf.SearchResult{}
+		}
 		resJSON, _ := json.Marshal(results)
 		s.sendToolResult(req.ID, string(resJSON), false)
 
 	case "okf_show":
 		conceptID, _ := callParams.Arguments["concept_id"].(string)
+		conceptID = strings.TrimSpace(conceptID)
 		if err := okf.ValidateConceptID(conceptID); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), true)
 			return
@@ -499,6 +503,7 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 
 	case "okf_create":
 		conceptID, _ := callParams.Arguments["concept_id"].(string)
+		conceptID = strings.TrimSpace(conceptID)
 		if err := okf.ValidateConceptID(conceptID); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), true)
 			return
@@ -508,30 +513,30 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		desc, _ := callParams.Arguments["description"].(string)
 		body, _ := callParams.Arguments["body"].(string)
 
-		if strings.TrimSpace(conceptType) == "" {
+		trimmedType := strings.TrimSpace(conceptType)
+		trimmedTitle := strings.TrimSpace(title)
+		trimmedDesc := strings.TrimSpace(desc)
+
+		if trimmedType == "" {
 			s.sendToolResult(req.ID, "Invalid type: argument 'type' is required and cannot be empty", true)
 			return
 		}
-		if strings.TrimSpace(title) == "" {
+		if trimmedTitle == "" {
 			s.sendToolResult(req.ID, "Invalid title: argument 'title' is required and cannot be empty", true)
 			return
 		}
-		if strings.TrimSpace(desc) == "" {
+		if trimmedDesc == "" {
 			s.sendToolResult(req.ID, "Invalid description: argument 'description' is required and cannot be empty", true)
 			return
 		}
 
-		relPath := conceptID
-		if !strings.HasSuffix(relPath, ".md") {
-			relPath += ".md"
-		}
-
+		cleanID := strings.TrimSuffix(conceptID, ".md")
 		c := &okf.Concept{
-			ID:          strings.TrimSuffix(conceptID, ".md"),
-			Path:        relPath,
-			Type:        conceptType,
-			Title:       title,
-			Description: desc,
+			ID:          cleanID,
+			Path:        cleanID + ".md",
+			Type:        trimmedType,
+			Title:       trimmedTitle,
+			Description: trimmedDesc,
 			Body:        body,
 		}
 
@@ -544,6 +549,7 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 
 	case "okf_update":
 		conceptID, _ := callParams.Arguments["concept_id"].(string)
+		conceptID = strings.TrimSpace(conceptID)
 		if err := okf.ValidateConceptID(conceptID); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), true)
 			return
@@ -556,18 +562,20 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		}
 
 		if title, ok := callParams.Arguments["title"].(string); ok {
-			if strings.TrimSpace(title) == "" {
+			trimmedTitle := strings.TrimSpace(title)
+			if trimmedTitle == "" {
 				s.sendToolResult(req.ID, "Invalid title: argument 'title' cannot be empty or whitespace", true)
 				return
 			}
-			c.Title = title
+			c.Title = trimmedTitle
 		}
 		if desc, ok := callParams.Arguments["description"].(string); ok {
-			if strings.TrimSpace(desc) == "" {
+			trimmedDesc := strings.TrimSpace(desc)
+			if trimmedDesc == "" {
 				s.sendToolResult(req.ID, "Invalid description: argument 'description' cannot be empty or whitespace", true)
 				return
 			}
-			c.Description = desc
+			c.Description = trimmedDesc
 		}
 		if body, ok := callParams.Arguments["body"].(string); ok && body != "" {
 			c.Body = body
@@ -585,12 +593,19 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		tgtID, _ := callParams.Arguments["target_id"].(string)
 		desc, _ := callParams.Arguments["description"].(string)
 
+		srcID = strings.TrimSpace(srcID)
+		tgtID = strings.TrimSpace(tgtID)
+
 		if err := okf.ValidateConceptID(srcID); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid source_id: %v", err), true)
 			return
 		}
 		if err := okf.ValidateConceptID(tgtID); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid target_id: %v", err), true)
+			return
+		}
+		if strings.TrimSuffix(srcID, ".md") == strings.TrimSuffix(tgtID, ".md") {
+			s.sendToolResult(req.ID, "Invalid relate: cannot relate concept to itself", true)
 			return
 		}
 

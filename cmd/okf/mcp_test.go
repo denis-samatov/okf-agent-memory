@@ -439,6 +439,13 @@ func TestMCPRelateAndShow_ValidationChecks(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Bundle\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
 
+	// Create initial concept
+	createReq := `{"jsonrpc":"2.0","id":100,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"  valid-source  ","type":"Fact","title":"Valid Source","description":"Desc"}}}`
+	resps := runMCPConversation(t, bundleDir, []string{createReq})
+	if len(resps) != 1 || resps[0].Error != nil {
+		t.Fatalf("Failed to create valid-source: %+v", resps)
+	}
+
 	inputs := []string{
 		// 1. okf_show with traversal concept_id
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_show","arguments":{"bundle":"` + bundleDir + `","concept_id":"../../etc/passwd"}}}`,
@@ -446,6 +453,10 @@ func TestMCPRelateAndShow_ValidationChecks(t *testing.T) {
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_relate","arguments":{"bundle":"` + bundleDir + `","source_id":"../escaped","target_id":"valid-target"}}}`,
 		// 3. okf_relate with traversal target_id
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"okf_relate","arguments":{"bundle":"` + bundleDir + `","source_id":"valid-source","target_id":"../escaped"}}}`,
+		// 4. okf_relate self-relation attempt
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"okf_relate","arguments":{"bundle":"` + bundleDir + `","source_id":"valid-source","target_id":"valid-source"}}}`,
+		// 5. okf_create with whitespace type
+		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"valid-2","type":"   ","title":"T","description":"D"}}}`,
 	}
 
 	responses := runMCPConversation(t, bundleDir, inputs)
@@ -462,6 +473,17 @@ func TestMCPRelateAndShow_ValidationChecks(t *testing.T) {
 		if !isError {
 			t.Errorf("Expected response %d to return isError: true, got: %+v", i+1, rMap)
 		}
+	}
+
+	// Verify show with whitespace padding succeeds
+	showReq := `{"jsonrpc":"2.0","id":200,"method":"tools/call","params":{"name":"okf_show","arguments":{"bundle":"` + bundleDir + `","concept_id":"  valid-source  "}}}`
+	showResps := runMCPConversation(t, bundleDir, []string{showReq})
+	if len(showResps) != 1 {
+		t.Fatalf("Expected 1 response for padded show, got %d", len(showResps))
+	}
+	rMap, ok := showResps[0].Result.(map[string]any)
+	if !ok || rMap["isError"] == true {
+		t.Errorf("Expected padded show to succeed, got: %+v", showResps[0])
 	}
 }
 

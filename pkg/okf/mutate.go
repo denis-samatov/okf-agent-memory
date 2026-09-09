@@ -248,6 +248,13 @@ func resolveInBundle(bundleDir, relPath string) (string, error) {
 // sanitizeConceptMetadata validates that concept metadata fields do not contain
 // newlines or frontmatter delimiters that could lead to YAML injection or delimiter smuggling.
 func sanitizeConceptMetadata(c *Concept) error {
+	if strings.TrimSpace(c.Type) == "" {
+		return fmt.Errorf("concept type cannot be empty or whitespace")
+	}
+	if strings.TrimSpace(c.Title) == "" {
+		return fmt.Errorf("concept title cannot be empty or whitespace")
+	}
+
 	fields := []struct {
 		name  string
 		value string
@@ -294,6 +301,12 @@ func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, a
 		return err
 	}
 
+	c.Type = strings.TrimSpace(c.Type)
+	c.Title = strings.TrimSpace(c.Title)
+	if c.Description != "" {
+		c.Description = strings.TrimSpace(c.Description)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
@@ -329,17 +342,30 @@ func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, a
 func RelateConcepts(bundleDir, sourceID, targetID, relationDesc, actor string) error {
 	relationDesc = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(relationDesc, "\r", " "), "\n", " "))
 
+	sourceID = strings.TrimSpace(strings.TrimSuffix(sourceID, ".md"))
+	targetID = strings.TrimSpace(strings.TrimSuffix(targetID, ".md"))
+
+	if err := ValidateConceptID(sourceID); err != nil {
+		return fmt.Errorf("invalid source concept ID: %w", err)
+	}
+	if err := ValidateConceptID(targetID); err != nil {
+		return fmt.Errorf("invalid target concept ID: %w", err)
+	}
+	if sourceID == targetID {
+		return fmt.Errorf("cannot relate concept to itself (%s)", sourceID)
+	}
+
 	b, err := LoadBundle(bundleDir)
 	if err != nil {
 		return fmt.Errorf("failed to load bundle: %w", err)
 	}
 
-	srcConcept, ok := b.Concepts[strings.TrimSuffix(sourceID, ".md")]
+	srcConcept, ok := b.Concepts[sourceID]
 	if !ok {
 		return fmt.Errorf("source concept '%s' not found", sourceID)
 	}
 
-	tgtConcept, ok := b.Concepts[strings.TrimSuffix(targetID, ".md")]
+	tgtConcept, ok := b.Concepts[targetID]
 	if !ok {
 		return fmt.Errorf("target concept '%s' not found", targetID)
 	}

@@ -265,7 +265,12 @@ func cmdShow(args []string) {
 		os.Exit(1)
 	}
 
-	conceptID := strings.TrimSuffix(args[0], ".md")
+	rawID := strings.TrimSpace(args[0])
+	if err := okf.ValidateConceptID(rawID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	conceptID := strings.TrimSuffix(rawID, ".md")
 	var subArgs []string
 	if len(args) > 1 {
 		subArgs = args[1:]
@@ -327,12 +332,13 @@ func cmdCreate(args []string) {
 		os.Exit(1)
 	}
 
-	if err := okf.ValidateConceptID(args[0]); err != nil {
+	rawID := strings.TrimSpace(args[0])
+	if err := okf.ValidateConceptID(rawID); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	conceptID := strings.TrimSuffix(args[0], ".md")
+	conceptID := strings.TrimSuffix(rawID, ".md")
 	var subArgs []string
 	if len(args) > 1 {
 		subArgs = args[1:]
@@ -352,14 +358,18 @@ func cmdCreate(args []string) {
 	bundleDir, flagArgs := defaultBundle(subArgs)
 	_ = fs.Parse(flagArgs)
 
-	if *cType == "" {
-		fmt.Fprintln(os.Stderr, "Error: --type is required")
+	trimmedType := strings.TrimSpace(*cType)
+	if trimmedType == "" {
+		fmt.Fprintln(os.Stderr, "Error: --type is required and cannot be empty or whitespace")
 		os.Exit(1)
 	}
 
-	if *title == "" {
-		*title = filepath.Base(conceptID)
+	trimmedTitle := strings.TrimSpace(*title)
+	if trimmedTitle == "" {
+		trimmedTitle = filepath.Base(conceptID)
 	}
+
+	trimmedDesc := strings.TrimSpace(*desc)
 
 	var tags []string
 	if *tagsStr != "" {
@@ -374,9 +384,9 @@ func cmdCreate(args []string) {
 	c := &okf.Concept{
 		ID:          conceptID,
 		Path:        conceptID + ".md",
-		Type:        *cType,
-		Title:       *title,
-		Description: *desc,
+		Type:        trimmedType,
+		Title:       trimmedTitle,
+		Description: trimmedDesc,
 		Tags:        tags,
 		Body:        *body,
 	}
@@ -405,7 +415,13 @@ func cmdUpdate(args []string) {
 		os.Exit(1)
 	}
 
-	conceptID := strings.TrimSuffix(args[0], ".md")
+	rawID := strings.TrimSpace(args[0])
+	if err := okf.ValidateConceptID(rawID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	conceptID := strings.TrimSuffix(rawID, ".md")
 	var subArgs []string
 	if len(args) > 1 {
 		subArgs = args[1:]
@@ -435,13 +451,33 @@ func cmdUpdate(args []string) {
 		os.Exit(1)
 	}
 
-	if *title != "" {
-		c.Title = *title
+	isPassed := func(name string) bool {
+		found := false
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == name {
+				found = true
+			}
+		})
+		return found
 	}
-	if *desc != "" {
-		c.Description = *desc
+
+	if isPassed("title") {
+		trimmedTitle := strings.TrimSpace(*title)
+		if trimmedTitle == "" {
+			fmt.Fprintln(os.Stderr, "Error: --title cannot be empty or whitespace")
+			os.Exit(1)
+		}
+		c.Title = trimmedTitle
 	}
-	if *body != "" {
+	if isPassed("desc") {
+		trimmedDesc := strings.TrimSpace(*desc)
+		if trimmedDesc == "" {
+			fmt.Fprintln(os.Stderr, "Error: --desc cannot be empty or whitespace")
+			os.Exit(1)
+		}
+		c.Description = trimmedDesc
+	}
+	if isPassed("body") {
 		c.Body = *body
 	}
 
@@ -469,8 +505,21 @@ func cmdRelate(args []string) {
 		os.Exit(1)
 	}
 
-	sourceID := args[0]
-	targetID := args[1]
+	sourceID := strings.TrimSpace(args[0])
+	targetID := strings.TrimSpace(args[1])
+	if err := okf.ValidateConceptID(sourceID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: invalid source concept ID: %v\n", err)
+		os.Exit(1)
+	}
+	if err := okf.ValidateConceptID(targetID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: invalid target concept ID: %v\n", err)
+		os.Exit(1)
+	}
+	if strings.TrimSuffix(sourceID, ".md") == strings.TrimSuffix(targetID, ".md") {
+		fmt.Fprintln(os.Stderr, "Error: cannot relate concept to itself")
+		os.Exit(1)
+	}
+
 	var subArgs []string
 	if len(args) > 2 {
 		subArgs = args[2:]

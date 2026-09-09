@@ -106,8 +106,11 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			continue
 		}
 
-		if c.Type == "" {
+		if strings.TrimSpace(c.Type) == "" {
 			res.Errors = append(res.Errors, fmt.Sprintf("%s: 'type' field is missing or empty", at))
+		}
+		if c.Title != "" && strings.TrimSpace(c.Title) == "" {
+			res.Errors = append(res.Errors, fmt.Sprintf("%s: 'title' field cannot be whitespace", at))
 		}
 
 		bodyWithoutFences := StripFences(c.Body)

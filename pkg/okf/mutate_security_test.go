@@ -572,3 +572,60 @@ func TestSaveConceptRejectsDirectorySymlinkEscape(t *testing.T) {
 		t.Errorf("Expected path traversal error message, got: %v", err)
 	}
 }
+
+// TestSaveConceptRejectsWhitespaceTitleAndType verifies defense-in-depth in SaveConcept.
+func TestSaveConceptRejectsWhitespaceTitleAndType(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	// 1. Whitespace type
+	c1 := &Concept{
+		Path:  "valid.md",
+		Title: "Valid Title",
+		Type:  "   ",
+	}
+	if err := SaveConcept(bundleDir, c1, true, false, false, "test"); err == nil {
+		t.Errorf("SaveConcept: expected error for whitespace type, got nil")
+	}
+
+	// 2. Whitespace title
+	c2 := &Concept{
+		Path:  "valid.md",
+		Title: " \t\n ",
+		Type:  "Fact",
+	}
+	if err := SaveConcept(bundleDir, c2, true, false, false, "test"); err == nil {
+		t.Errorf("SaveConcept: expected error for whitespace title, got nil")
+	}
+}
+
+// TestRelateConceptsRejectsSelfRelationAndWhitespace verifies RelateConcepts guards.
+func TestRelateConceptsRejectsSelfRelationAndWhitespace(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	c := &Concept{Path: "self.md", Title: "Self", Type: "Fact"}
+	if err := SaveConcept(bundleDir, c, true, false, false, "test"); err != nil {
+		t.Fatalf("SaveConcept: %v", err)
+	}
+
+	// 1. Self relation
+	if err := RelateConcepts(bundleDir, "self", "self", "self-link", "test"); err == nil {
+		t.Errorf("RelateConcepts: expected error when relating concept to itself, got nil")
+	}
+	if err := RelateConcepts(bundleDir, "  self.md  ", "self", "self-link", "test"); err == nil {
+		t.Errorf("RelateConcepts: expected error when relating concept to itself with padding, got nil")
+	}
+
+	// 2. Traversal or invalid IDs
+	if err := RelateConcepts(bundleDir, "../evil", "self", "link", "test"); err == nil {
+		t.Errorf("RelateConcepts: expected error for traversal sourceID, got nil")
+	}
+	if err := RelateConcepts(bundleDir, "self", "   ", "link", "test"); err == nil {
+		t.Errorf("RelateConcepts: expected error for whitespace targetID, got nil")
+	}
+}
