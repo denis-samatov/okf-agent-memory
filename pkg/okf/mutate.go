@@ -292,6 +292,7 @@ func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, a
 	}
 
 	// Update generated timestamp & actor
+	actor = strings.TrimSpace(actor)
 	if actor == "" {
 		actor = "agent/okf-tool"
 	}

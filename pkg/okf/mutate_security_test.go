@@ -629,3 +629,27 @@ func TestRelateConceptsRejectsSelfRelationAndWhitespace(t *testing.T) {
 		t.Errorf("RelateConcepts: expected error for whitespace targetID, got nil")
 	}
 }
+
+// TestSaveConceptActorWhitespaceFallback verifies that whitespace actor falls back to default.
+func TestSaveConceptActorWhitespaceFallback(t *testing.T) {
+	bundleDir := t.TempDir()
+	if err := InitBundle(bundleDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	c1 := &Concept{Path: "c1.md", Title: "C1", Type: "Fact"}
+	if err := SaveConcept(bundleDir, c1, true, false, false, "   "); err != nil {
+		t.Fatalf("SaveConcept whitespace actor: %v", err)
+	}
+	if c1.Generated == nil || c1.Generated.By != "agent/okf-tool" {
+		t.Errorf("Expected fallback to 'agent/okf-tool', got %+v", c1.Generated)
+	}
+
+	c2 := &Concept{Path: "c2.md", Title: "C2", Type: "Fact"}
+	if err := SaveConcept(bundleDir, c2, true, false, false, "  agent/custom  "); err != nil {
+		t.Fatalf("SaveConcept padded actor: %v", err)
+	}
+	if c2.Generated == nil || c2.Generated.By != "agent/custom" {
+		t.Errorf("Expected trimmed actor 'agent/custom', got %+v", c2.Generated)
+	}
+}
