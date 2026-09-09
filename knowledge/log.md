@@ -1,3 +1,6 @@
+## 2026-09-09
+* **Release**: Prepared version v0.1.5 — Adversarial Security & DRY Hardening Release integrating autonomous Google Jules adversarial security loop, boundary symlink containment, central DRY metadata sanitization, actor whitespace fallback, self-relation loop prevention, and Jules workflow automation (`jules-review`, `jules-merge`).
+
 ## 2026-09-08
 * **Update**: Linked `architecture/layers.md` and `convention/contributing.md` to `convention/coding-standards.md`.
 * **Creation**: Documented concept `convention/coding-standards.md` (Engineering & Coding Best Practices (Clean Code, TDD, DRY)).
