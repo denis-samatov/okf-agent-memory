@@ -254,6 +254,9 @@ func sanitizeConceptMetadata(c *Concept) error {
 	if strings.TrimSpace(c.Title) == "" {
 		return fmt.Errorf("concept title cannot be empty or whitespace")
 	}
+	if c.Description != "" && strings.TrimSpace(c.Description) == "" {
+		return fmt.Errorf("concept description cannot be empty or whitespace")
+	}
 
 	fields := []struct {
 		name  string
