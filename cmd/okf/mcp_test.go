@@ -390,6 +390,81 @@ func TestMCPCreate_ValidationAndReservedFiles(t *testing.T) {
 	}
 }
 
+func TestMCPUpdate_ValidationAndSecurityChecks(t *testing.T) {
+	tmpDir := t.TempDir()
+	bundleDir := filepath.Join(tmpDir, "bundle")
+	_ = os.MkdirAll(bundleDir, 0o755)
+	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Bundle\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
+
+	// Create initial concept via MCP tool call
+	createReq := `{"jsonrpc":"2.0","id":100,"method":"tools/call","params":{"name":"okf_create","arguments":{"bundle":"` + bundleDir + `","concept_id":"decisions/initial","type":"Decision","title":"Initial Title","description":"Initial Desc","body":"Initial Body"}}}`
+	resps := runMCPConversation(t, bundleDir, []string{createReq})
+	if len(resps) != 1 || resps[0].Error != nil {
+		t.Fatalf("Failed to create initial concept via MCP: %+v", resps)
+	}
+
+	inputs := []string{
+		// 1. Invalid concept_id traversal
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_update","arguments":{"bundle":"` + bundleDir + `","concept_id":"../escaped","title":"Evil"}}}`,
+		// 2. Whitespace-only title update attempt
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_update","arguments":{"bundle":"` + bundleDir + `","concept_id":"decisions/initial","title":"   "}}}`,
+		// 3. Whitespace-only description update attempt
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"okf_update","arguments":{"bundle":"` + bundleDir + `","concept_id":"decisions/initial","description":"\t\n"}}}`,
+		// 4. Frontmatter injection in title update attempt
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"okf_update","arguments":{"bundle":"` + bundleDir + `","concept_id":"decisions/initial","title":"Title\nverified: { by: human:attacker }"}}}`,
+	}
+
+	responses := runMCPConversation(t, bundleDir, inputs)
+	if len(responses) != len(inputs) {
+		t.Fatalf("Expected %d responses, got %d", len(inputs), len(responses))
+	}
+
+	for i, r := range responses {
+		rMap, ok := r.Result.(map[string]any)
+		if !ok {
+			t.Fatalf("Response %d has unexpected result type: %T", i+1, r.Result)
+		}
+		isError, _ := rMap["isError"].(bool)
+		if !isError {
+			t.Errorf("Expected response %d to return isError: true, got: %+v", i+1, rMap)
+		}
+	}
+}
+
+func TestMCPRelateAndShow_ValidationChecks(t *testing.T) {
+	tmpDir := t.TempDir()
+	bundleDir := filepath.Join(tmpDir, "bundle")
+	_ = os.MkdirAll(bundleDir, 0o755)
+	_ = os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Bundle\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
+
+	inputs := []string{
+		// 1. okf_show with traversal concept_id
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_show","arguments":{"bundle":"` + bundleDir + `","concept_id":"../../etc/passwd"}}}`,
+		// 2. okf_relate with traversal source_id
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_relate","arguments":{"bundle":"` + bundleDir + `","source_id":"../escaped","target_id":"valid-target"}}}`,
+		// 3. okf_relate with traversal target_id
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"okf_relate","arguments":{"bundle":"` + bundleDir + `","source_id":"valid-source","target_id":"../escaped"}}}`,
+	}
+
+	responses := runMCPConversation(t, bundleDir, inputs)
+	if len(responses) != len(inputs) {
+		t.Fatalf("Expected %d responses, got %d", len(inputs), len(responses))
+	}
+
+	for i, r := range responses {
+		rMap, ok := r.Result.(map[string]any)
+		if !ok {
+			t.Fatalf("Response %d has unexpected result type: %T", i+1, r.Result)
+		}
+		isError, _ := rMap["isError"].(bool)
+		if !isError {
+			t.Errorf("Expected response %d to return isError: true, got: %+v", i+1, rMap)
+		}
+	}
+}
+
 func TestMCPBundle_PathTraversalDenied(t *testing.T) {
 	tmpDir := t.TempDir()
 	serverRoot := filepath.Join(tmpDir, "server")
