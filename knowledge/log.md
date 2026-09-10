@@ -1,3 +1,6 @@
+## 2026-09-10
+* **Creation**: Documented concept `architecture/metadata-roundtrip.md` (Safe Unknown Metadata Round-Trip).
+
 ## 2026-09-09
 * **Release**: Prepared version v0.1.5 — Adversarial Security & DRY Hardening Release integrating autonomous Google Jules adversarial security loop, boundary symlink containment, central DRY metadata sanitization, actor whitespace fallback, self-relation loop prevention, and Jules workflow automation (`jules-review`, `jules-merge`).
 
