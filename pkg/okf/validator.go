@@ -37,18 +37,8 @@ type ValidateOptions struct {
 
 func parseTimestamp(s string) (time.Time, bool) {
 	s = strings.TrimSpace(s)
-	layouts := []string{
-		time.RFC3339Nano,
-		time.RFC3339,
-		"2006-01-02T15:04:05Z07:00",
-		"2006-01-02T15:04:05",
-		"2006-01-02 15:04:05",
-		"2006-01-02",
-	}
-	for _, l := range layouts {
-		if t, err := time.Parse(l, s); err == nil {
-			return t, true
-		}
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t, true
 	}
 	return time.Time{}, false
 }
@@ -66,7 +56,7 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 		Orphans:      b.Orphans,
 	}
 
-	today := time.Now().UTC().Format("2006-01-02")
+	now := time.Now().UTC()
 	isV2 := b.DeclaredVer == "0.2"
 
 	// 1. Validate sub-indexes have no frontmatter
@@ -140,8 +130,10 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 					res.Warnings = append(res.Warnings, fmt.Sprintf("%s: sources[%d].author '%s' is not a valid actor", at, i, s.Author))
 				}
 			}
-			if s.LastModified != "" && !isoDateRegex.MatchString(s.LastModified) {
-				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: sources[%d].last_modified '%s' is not YYYY-MM-DD", at, i, s.LastModified))
+			if s.LastModified != "" {
+				if _, ok := parseTimestamp(s.LastModified); !ok {
+					res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: sources[%d].last_modified '%s' is not an RFC3339 timestamp with an explicit UTC offset", at, i, s.LastModified))
+				}
 			}
 		}
 
@@ -166,7 +158,7 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			if c.Generated.At == "" {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: 'generated' has no 'at' timestamp", at))
 			} else if _, ok := parseTimestamp(c.Generated.At); !ok {
-				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: generated.at '%s' is not a valid ISO 8601 timestamp", at, c.Generated.At))
+				res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: generated.at '%s' is not an RFC3339 timestamp with an explicit UTC offset", at, c.Generated.At))
 			}
 		}
 
@@ -180,7 +172,7 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			if v.At == "" {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: verified[%d] has no 'at' timestamp", at, i))
 			} else if vT, okV := parseTimestamp(v.At); !okV {
-				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: verified[%d].at '%s' is not a valid ISO 8601 timestamp", at, i, v.At))
+				res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: verified[%d].at '%s' is not an RFC3339 timestamp with an explicit UTC offset", at, i, v.At))
 			} else if c.Generated != nil && c.Generated.At != "" {
 				if genT, okGen := parseTimestamp(c.Generated.At); okGen {
 					if vT.Before(genT) {
@@ -195,11 +187,11 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: status '%s' is not draft|stable|deprecated", at, c.Status))
 		}
 		if c.StaleAfter != "" {
-			if !isoDateRegex.MatchString(c.StaleAfter) {
-				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: stale_after '%s' is not YYYY-MM-DD", at, c.StaleAfter))
-			} else if today >= c.StaleAfter {
+			if staleAt, ok := parseTimestamp(c.StaleAfter); !ok {
+				res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: stale_after '%s' is not an RFC3339 timestamp with an explicit UTC offset", at, c.StaleAfter))
+			} else if !now.Before(staleAt) {
 				res.StaleCount++
-				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: concept is stale (stale_after %s <= %s)", at, c.StaleAfter, today))
+				res.Warnings = append(res.Warnings, fmt.Sprintf("%s: concept is stale (stale_after %s <= %s)", at, c.StaleAfter, now.Format(time.RFC3339)))
 			}
 		}
 	}

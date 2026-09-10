@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/okf-memory/okf-agent-memory/pkg/okf"
 )
@@ -369,7 +370,7 @@ func TestValidateStaleGating(t *testing.T) {
 				ID:         "test/concept",
 				Path:       "test/concept.md",
 				Type:       "Decision",
-				StaleAfter: "2020-01-01", // Past date
+				StaleAfter: "2020-01-01T00:00:00Z", // Past timestamp
 			},
 		},
 		BrokenLinks: []okf.BrokenLink{},
@@ -392,6 +393,64 @@ func TestValidateStaleGating(t *testing.T) {
 	}
 	if resStale.GatePassed {
 		t.Errorf("Expected gate to fail when Stale: true and StaleCount > 0")
+	}
+}
+
+func TestValidateTimestampFieldsRequireExplicitOffset(t *testing.T) {
+	b := &okf.Bundle{
+		DeclaredVer: "0.2",
+		Concepts: map[string]*okf.Concept{
+			"test/concept": {
+				ID:         "test/concept",
+				Path:       "test/concept.md",
+				Type:       "Fact",
+				StaleAfter: "2999-01-01T00:00:00+07:00",
+				Generated:  &okf.Generated{By: "agent/test", At: "2026-09-08T10:00:00Z"},
+				Verified:   []okf.Verified{{By: "human:reviewer", At: "2026-09-08T12:00:00+02:00"}},
+				Sources: []okf.Source{
+					{Resource: "https://example.com", LastModified: "2026-09-08T12:30:00Z"},
+				},
+			},
+		},
+		BrokenLinks: []okf.BrokenLink{},
+		Orphans:     []string{},
+	}
+
+	res := okf.Validate(b, okf.ValidateOptions{})
+	if len(res.Warnings) != 0 {
+		t.Fatalf("valid RFC3339 timestamps produced warnings: %v", res.Warnings)
+	}
+
+	b.Concepts["test/concept"].StaleAfter = "2999-01-01"
+	b.Concepts["test/concept"].Sources[0].LastModified = "2026-09-08T12:30:00"
+	b.Concepts["test/concept"].Generated.At = "2026-09-08T10:00:00"
+	b.Concepts["test/concept"].Verified[0].At = "2026-09-08T12:00:00"
+	res = okf.Validate(b, okf.ValidateOptions{Strict: true})
+	if len(res.GateFindings) != 4 {
+		t.Fatalf("timestamps without offsets produced %d gate findings, want 4: %v", len(res.GateFindings), res.GateFindings)
+	}
+	if res.GatePassed {
+		t.Fatal("strict validation passed timestamps without explicit offsets")
+	}
+}
+
+func TestValidateStaleAfterComparesInstantsAcrossOffsets(t *testing.T) {
+	pastWithFutureLocalDate := time.Now().UTC().Add(-time.Hour).In(time.FixedZone("UTC+14", 14*60*60)).Format(time.RFC3339)
+	b := &okf.Bundle{
+		DeclaredVer: "0.2",
+		Concepts: map[string]*okf.Concept{
+			"test/concept": {
+				ID:         "test/concept",
+				Path:       "test/concept.md",
+				Type:       "Fact",
+				StaleAfter: pastWithFutureLocalDate,
+			},
+		},
+	}
+
+	res := okf.Validate(b, okf.ValidateOptions{})
+	if res.StaleCount != 1 {
+		t.Fatalf("StaleCount = %d for past instant %q, want 1", res.StaleCount, pastWithFutureLocalDate)
 	}
 }
 

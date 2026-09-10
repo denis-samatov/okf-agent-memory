@@ -14,7 +14,7 @@ okf <command> [arguments] [flags]
 
 * `--json`: Outputs machine-readable JSON instead of human-friendly terminal formatting.
 * `--strict`: Evaluates connectivity warnings (orphans, broken links) and provenance integrity (including superseded verifications `verified.at < generated.at`, missing actors, and v0.1 legacy syntax) as fatal gate errors.
-* `--stale`: Evaluates expired lifecycle dates (`today >= stale_after`) as fatal errors. By default, stale concepts are reported as lifecycle warnings without failing `--strict`, separating CI build integrity from temporal review cycles.
+* `--stale`: Evaluates expired lifecycle timestamps (`now >= stale_after`) as fatal errors. Timestamp values must use the RFC3339 profile of ISO 8601 with an explicit UTC offset. By default, stale concepts are reported as lifecycle warnings without failing `--strict`, separating CI build integrity from temporal review cycles.
 * `--drift`: Detects discrepancies between concept frontmatter descriptions and listings inside parent `index.md` files.
 
 ---
@@ -33,7 +33,7 @@ okf validate [bundle-path] [--strict] [--stale] [--drift] [--json]
   * `bundle-path` (optional, default: `./knowledge` or `.`): Path to the OKF bundle root directory.
 * **Flags**:
   * `--strict`: Fails the producer gate on broken links, orphans, superseded verifications, and schema discrepancies.
-  * `--stale`: Fails the producer gate if any concept has reached or passed its `stale_after` date.
+  * `--stale`: Fails the producer gate if any concept has reached or passed its `stale_after` timestamp.
   * `--drift`: Checks whether concept listings in index files differ from concept descriptions.
   * `--json`: Emits machine-readable JSON diagnostics.
 * **Exit Codes**:

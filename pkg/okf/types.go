@@ -19,7 +19,7 @@ type Concept struct {
 	Generated   *Generated           `json:"generated,omitempty"`
 	Verified    []Verified           `json:"verified,omitempty"`
 	Status      string               `json:"status,omitempty"`      // draft | stable | deprecated
-	StaleAfter  string               `json:"stale_after,omitempty"` // YYYY-MM-DD
+	StaleAfter  string               `json:"stale_after,omitempty"` // RFC3339 timestamp with explicit UTC offset
 	Sources     []Source             `json:"sources,omitempty"`
 	Attestation *AttestedComputation `json:"attestation,omitempty"`
 	Extra       map[string]any       `json:"extra,omitempty"` // Preserved unknown fields
